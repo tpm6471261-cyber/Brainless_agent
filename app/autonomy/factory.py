@@ -25,4 +25,4 @@ class AgentFactory:
             raise ValueError("Specification requests permissions unavailable to its parent")
         return self.manager.create_agent(parent_agent_id, spec.name, spec.role, spec.objective, spec.task,
                                          required_permissions, set(spec.tools),
-                                         {str(k): str(v) for k, v in spec.constraints.items()})
+                                         {str(k): str(v) for k, v in spec.constraints.items()}, spec.task_id)

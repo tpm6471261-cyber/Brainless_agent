@@ -60,6 +60,12 @@ class SQLiteMemory:
                 row["prompt"], row["response"], row["status"], row["duration_seconds"], row["workflow"],
                 bool(row["final_result"]), row["error"], row["screenshot_path"]) for row in rows]
 
+    def recent_metadata(self, limit: int = 100) -> list[dict[str, object]]:
+        """Dashboard-safe task history without prompt, response, or screenshot content."""
+        rows = self._connection.execute("SELECT task_id,timestamp,provider,status,duration_seconds,"
+            "final_result,error FROM task_results ORDER BY timestamp DESC LIMIT ?", (max(0, min(limit, 500)),)).fetchall()
+        return [dict(row) for row in rows]
+
     def close(self) -> None:
         self._connection.close()
 

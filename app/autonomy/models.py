@@ -104,6 +104,7 @@ class AgentSpec:
     task: str
     required_capabilities: frozenset[str]
     tools: frozenset[str]
+    task_id: str | None = None
     constraints: dict[str, Any] = field(default_factory=dict)
 
 

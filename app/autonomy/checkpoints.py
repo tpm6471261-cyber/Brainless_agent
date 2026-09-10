@@ -19,6 +19,7 @@ class ExecutionCheckpoint:
     permissions: dict[str, tuple[str, ...]] | None = None
     resource_owners: dict[str, str] | None = None
     errors: tuple[str, ...] = ()
+    cognitive_state: dict[str, Any] | None = None
     created_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:

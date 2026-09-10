@@ -2,6 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
+from uuid import uuid4
 
 from app.autonomy.models import ComputerState
 
@@ -13,6 +14,12 @@ class ResolvedTarget:
     confidence: float
     evidence: str
     coordinates: tuple[int, int] | None = None
+    bounding_box: tuple[int, int, int, int] | None = None
+    target_id: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.target_id:
+            object.__setattr__(self, "target_id", str(uuid4()))
 
 
 class TargetProvider(Protocol):
@@ -33,4 +40,13 @@ class TargetResolver:
         if coordinate_fallback:
             candidates.append(ResolvedTarget(query, "coordinates", .2, "explicit fallback", coordinate_fallback))
         eligible = [item for item in candidates if item.confidence >= self.confidence_threshold]
-        return max(eligible, key=lambda item: item.confidence, default=None)
+        # Prefer deterministic semantic sources over visual/coordinate fallbacks
+        # whenever their confidence is comparable.
+        priority = {"accessibility": 5, "dom": 4, "text": 3, "visual": 2, "coordinates": 1}
+        return max(eligible, key=lambda item: (item.confidence, priority.get(item.method, 0)), default=None)
+
+    def resolve_environment(self, query: str, snapshot, *, minimum_confidence: float | None = None) -> ResolvedTarget | None:
+        """Resolve normalized UI semantically; kept separate from legacy ComputerState callers."""
+        from app.perception.grounding import ScreenGroundingEngine
+        return ScreenGroundingEngine().resolve(query, snapshot,
+            minimum_confidence=self.confidence_threshold if minimum_confidence is None else minimum_confidence)

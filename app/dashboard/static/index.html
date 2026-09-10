@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#090d12">
+  <title>Brainless Agent · Command Center</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to runtime data</a>
+  <header class="topbar">
+    <button id="menu" class="icon-button menu-button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+    <a class="brand" href="#overview" aria-label="Brainless Agent overview">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span><b>Brainless</b><small>COMMAND CENTER</small></span>
+    </a>
+    <div class="topbar-center">
+      <label class="search-box" for="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search missions, tasks, agents, events…" autocomplete="off"><kbd>/</kbd></label>
+    </div>
+    <div class="topbar-actions">
+      <span id="streamBadge" class="connection"><i></i> Connecting</span>
+      <button id="refresh" class="icon-button" title="Refresh snapshot" aria-label="Refresh snapshot">↻</button>
+      <button id="takeover" class="button button-danger">Take control</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside id="sidebar">
+      <nav aria-label="Command center">
+        <p class="nav-label">Operations</p>
+        <button data-view="overview" class="active"><span>◫</span>Overview</button>
+        <button data-view="voice"><span>◖</span>Voice</button>
+        <button data-view="perception"><span>◉</span>Perception</button>
+        <button data-view="missions"><span>◎</span>Missions <em id="missionCount">0</em></button>
+        <button data-view="tasks"><span>☷</span>Tasks</button>
+        <button data-view="schedules"><span>◷</span>Scheduler</button>
+        <p class="nav-label">Runtime</p>
+        <button data-view="agents"><span>◇</span>Agents</button>
+        <button data-view="hierarchy"><span>⑂</span>Hierarchy</button>
+        <button data-view="actions"><span>⌁</span>Computer activity</button>
+        <button data-view="world"><span>◉</span>World model</button>
+        <button data-view="resources"><span>▦</span>Resources</button>
+        <p class="nav-label">Governance</p>
+        <button data-view="approvals"><span>✓</span>Approvals <em id="approvalCount">0</em></button>
+        <button data-view="recovery"><span>↺</span>Recovery</button>
+        <button data-view="security"><span>⬡</span>Security</button>
+        <button data-view="leases"><span>⌛</span>Capability leases</button>
+        <button data-view="activity"><span>≋</span>Event stream</button>
+        <p class="nav-label">Intelligence</p>
+        <button data-view="memory"><span>◈</span>Memory</button>
+        <button data-view="skills"><span>✦</span>Skills</button>
+        <button data-view="analytics"><span>⌁</span>Analytics</button>
+        <button data-view="inventory"><span>▤</span>Inventory</button>
+        <button data-view="health"><span>♡</span>System health</button>
+      </nav>
+      <div class="runtime-card">
+        <div><span class="pulse"></span><b id="runtimeBadge">Connecting</b></div>
+        <small>Runtime authority</small>
+        <span id="lastSync">Awaiting snapshot</span>
+      </div>
+    </aside>
+
+    <main>
+      <section class="page-heading">
+        <div><p class="eyebrow">AUTONOMOUS OPERATIONS</p><h1 id="pageTitle">System overview</h1><p id="pageDescription">Live operational state from the authoritative runtime.</p></div>
+        <button id="newMission" class="button button-primary"><span>＋</span> Create mission</button>
+      </section>
+      <div id="content" tabindex="-1" aria-live="polite" aria-busy="true"></div>
+    </main>
+  </div>
+
+  <div id="toastRegion" class="toast-region" role="status" aria-live="polite"></div>
+  <dialog id="auth"><form method="dialog"><div class="dialog-icon">⬡</div><h2>Connect to runtime</h2><p>Enter the command-center access token. It remains in this browser tab.</p><label>Access token<input id="token" type="password" autocomplete="off" required autofocus></label><button id="connect" class="button button-primary" value="default">Connect securely</button></form></dialog>
+  <dialog id="missionDialog"><form method="dialog"><button class="dialog-close" value="cancel" aria-label="Close">×</button><p class="eyebrow">NEW OBJECTIVE</p><h2>Create autonomous mission</h2><p>The runtime will validate, plan, schedule, and verify this objective.</p><label>Objective<textarea id="missionGoal" maxlength="4000" rows="5" placeholder="Describe the outcome, not individual computer actions" required></textarea></label><label>Priority <small>−100 (low) to 100 (urgent)</small><input id="missionPriority" type="number" min="-100" max="100" value="0"></label><div class="dialog-actions"><button value="cancel" class="button">Cancel</button><button id="submitMission" class="button button-primary" value="default">Request mission</button></div></form></dialog>
+  <dialog id="voiceDialog"><form method="dialog"><button class="dialog-close" value="cancel" aria-label="Close">×</button><p class="eyebrow">WRITE-ONLY CREDENTIAL</p><h2>Configure AssemblyAI</h2><p>The API key is sent to the local runtime, retained in memory only, and never returned by the API, event stream, or logs.</p><label>AssemblyAI API key<input id="assemblyApiKey" type="password" minlength="16" maxlength="512" autocomplete="new-password" required></label><label>Realtime model<input id="assemblyModel" value="universal-3-5-pro" maxlength="100" required></label><label>Language <small>Optional / multilingual auto-detection</small><input id="voiceLanguage" maxlength="40" placeholder="e.g. en"></label><label>Minimum confidence<input id="voiceConfidence" type="number" min="0" max="1" step="0.01" value="0.75" required></label><div class="dialog-actions"><button value="cancel" class="button">Cancel</button><button id="submitVoiceConfig" class="button button-primary" value="default">Save to runtime memory</button></div></form></dialog>
+  <script src="/static/app.js"></script>
+</body>
+</html>

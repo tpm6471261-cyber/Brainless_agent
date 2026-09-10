@@ -54,6 +54,7 @@ class Agent:
     role: str
     objective: str
     current_task: str | None = None
+    current_task_id: str | None = None
     parent_agent_id: str | None = None
     permissions: set[str] = field(default_factory=set)
     available_tools: set[str] = field(default_factory=set)

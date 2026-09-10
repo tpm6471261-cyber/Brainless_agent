@@ -284,3 +284,23 @@ def test_task_engine_learns_then_reuses_a_verified_workflow_through_runtime_gate
         memories.close(); skills.close()
 
     asyncio.run(scenario())
+
+
+def test_action_results_audit_and_events_redact_secret_values(tmp_path) -> None:
+    async def scenario():
+        manager = AgentManager()
+        root = manager.create_root("Root", "orchestrator", "Coordinate", {
+            Permission.KEYBOARD_WRITE.value})
+        controller = LocalComputer(tmp_path)
+        actions = ActionRuntime(manager, controller)
+        child = manager.create_agent(root.agent_id, "Writer", "writer", "type",
+            task="type secret", permissions={Permission.KEYBOARD_WRITE.value},
+            tools={"keyboard.write"}, task_id="secret-task")
+        child.status = AgentStatus.RUNNING
+        result = await actions.perform(ComputerAction("keyboard.write",
+            {"text": "password is hunter2"}, child.agent_id, "secret-task",
+            "type supplied content", Permission.KEYBOARD_WRITE.value))
+        assert result.output == "[REDACTED]"
+        assert actions.audit[-1].arguments["text"] == "[REDACTED]"
+        assert "hunter2" not in str(actions.audit[-1])
+    asyncio.run(scenario())

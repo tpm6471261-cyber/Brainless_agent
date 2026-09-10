@@ -169,6 +169,8 @@ class AutonomousTaskEngine:
             observations=tuple({"source": fact.source, "key": key, "value": str(fact.value)}
                                for key, fact in self.actions.world_state.snapshot().facts.items()),
             verification_results=("goal acceptance criteria passed" if result.verified else "goal acceptance criteria failed",),
+            causal_evidence=tuple(item for item in self.actions.world_model.export_state()["causal_evidence"]
+                                  if item["expected_effect"] == item["observed_effect"] and item["supporting"] > 0),
             resource_usage={"actions": float(len([record for record in self.actions.audit if record.task_id.startswith(task.task_id)]))},
             capabilities_used=tuple(sorted({capability for node in chosen.tasks.values() for capability in node.capabilities})),
             tools_used=tuple(sorted({node.tool for node in chosen.tasks.values() if node.tool})),
@@ -194,7 +196,7 @@ class AutonomousTaskEngine:
             tuple(task_id for task_id, node in graph.tasks.items() if node.status is GraphTaskStatus.PENDING),
             {task_id: node.retries for task_id, node in graph.tasks.items()},
             {agent.agent_id: tuple(sorted(agent.permissions)) for agent in self.runtime.manager.list_agents()},
-            self.actions.locks.owners))
+            self.actions.locks.owners, cognitive_state=self.actions.world_model.export_state()))
 
     def _journal(self, task_id: str, event: str, detail: dict[str, object]) -> None:
         if self.journal:

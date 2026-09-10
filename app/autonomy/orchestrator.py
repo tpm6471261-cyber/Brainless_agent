@@ -8,6 +8,7 @@ from app.agents.manager import AgentManager
 from app.agents.models import Agent
 from app.autonomy.executor import ActionRuntime, DecisionProvider
 from app.autonomy.factory import AgentFactory
+from app.autonomy.reasoning_provider import ReasoningDecisionProvider
 from app.autonomy.models import AgentSpec, TaskRequirements
 from app.autonomy.registry import AgentRegistry
 from app.safety.permissions import Permission
@@ -43,26 +44,32 @@ class CapabilityAnalyzer:
 
 class AutonomousRuntime:
     def __init__(self, manager: AgentManager, actions: ActionRuntime,
-                 registry: AgentRegistry | None = None, analyzer: CapabilityAnalyzer | None = None) -> None:
+                 registry: AgentRegistry | None = None, analyzer: CapabilityAnalyzer | None = None,
+                 reasoning_provider=None) -> None:
         self.manager, self.actions = manager, actions
         self.registry, self.analyzer = registry or AgentRegistry(), analyzer or CapabilityAnalyzer()
+        self.reasoning_provider = reasoning_provider
         self.factory = AgentFactory(manager)
 
-    async def execute(self, root_agent_id: str, task_id: str, task: str, decider: DecisionProvider,
+    async def execute(self, root_agent_id: str, task_id: str, task: str, decider: DecisionProvider | None = None,
                       requirements: TaskRequirements | None = None) -> AutonomousResult:
         # Graph execution supplies validated requirements; ad-hoc execution is analysed.
+        if decider is None:
+            if self.reasoning_provider is None:
+                raise RuntimeError("A DecisionProvider or configured ReasoningProvider is required")
+            decider = ReasoningDecisionProvider(self.reasoning_provider, self.actions.proposal_validator, self.manager)
         requirements = requirements or self.analyzer.analyze(task)
         agent = self.registry.find(requirements)
         created = agent is None
         if agent is None:
             agent = self.factory.create(root_agent_id, AgentSpec(
                 name=requirements.role, role=requirements.role, objective=f"Execute {task}", task=task,
-                required_capabilities=requirements.capabilities, tools=requirements.tools,
+                required_capabilities=requirements.capabilities, tools=requirements.tools, task_id=task_id,
                 constraints={"least_privilege": True},
             ))
             self.registry.register(agent, requirements.capabilities)
         else:
-            self.manager.assign_task(root_agent_id, agent.agent_id, task)
+            self.manager.assign_task(root_agent_id, agent.agent_id, task, task_id=task_id)
 
         async def work(child: Agent, _: AgentManager) -> str:
             results = await self.actions.run_loop(child.agent_id, task_id, task, decider)
