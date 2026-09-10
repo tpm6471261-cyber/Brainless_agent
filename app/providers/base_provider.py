@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from abc import ABC
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from playwright.async_api import Locator, Page
 
@@ -28,6 +29,7 @@ class ProviderSelectors:
 
 class ChatbotProvider(ABC):
     name: str
+    composer_wait_seconds = 15.0
 
     def __init__(self, browser: BrowserManager, url: str, selectors: ProviderSelectors) -> None:
         self.browser, self.url, self.selectors = browser, url, selectors
@@ -43,10 +45,13 @@ class ChatbotProvider(ABC):
         body = (await page.locator("body").inner_text()).lower()
         if any(marker in body for marker in ("captcha", "verify you are human", "two-factor", "2fa")):
             raise UserInterventionRequired("Security challenge detected; complete it manually, then retry.")
-        if not await self._first_visible(self.selectors.input):
+        if not await self._wait_for_input():
+            # Re-read after the bounded wait: login shells and client-rendered
+            # composers frequently replace the initial DOM after navigation.
+            body = (await page.locator("body").inner_text()).lower()
             if any(marker in body for marker in ("log in", "sign in", "login")):
                 raise UserInterventionRequired("Login is required. Sign in manually in the persistent Chrome window.")
-            raise ProviderError(f"{self.name} prompt input was not found")
+            raise ProviderError(await self._input_not_found_message())
 
     async def start_conversation(self) -> None:
         """Focus the verified composer before the runtime sends a prompt.
@@ -55,15 +60,15 @@ class ChatbotProvider(ABC):
         observable action boundary: a page can be valid while its composer is
         covered by an onboarding dialog or otherwise not focusable.
         """
-        field = await self._first_visible(self.selectors.input)
+        field = await self._wait_for_input(timeout_seconds=3)
         if field is None:
-            raise ProviderError("Prompt input disappeared before it could be focused")
+            raise ProviderError(await self._input_not_found_message("disappeared before it could be focused"))
         await field.click()
 
     async def send_prompt(self, prompt: str) -> None:
-        field = await self._first_visible(self.selectors.input)
+        field = await self._wait_for_input(timeout_seconds=3)
         if field is None:
-            raise ProviderError("Prompt input disappeared before submission")
+            raise ProviderError(await self._input_not_found_message("disappeared before submission"))
         self._response_counts_before_submit = await self._response_counts()
         self._response_count_before_submit = sum(self._response_counts_before_submit.values())
         await field.click()
@@ -116,9 +121,40 @@ class ChatbotProvider(ABC):
         page = self._require_page()
         for selector in selectors:
             locator = page.locator(selector)
-            if await locator.count() and await locator.first.is_visible():
-                return locator.first
+            # Provider applications often retain a hidden mobile/old composer
+            # before the active one. Checking only ``locator.first`` therefore
+            # produces a false "input not found" even though another match is
+            # visible. Prefer the first visible and enabled candidate.
+            for index in range(await locator.count()):
+                candidate = locator.nth(index)
+                if await candidate.is_visible() and await candidate.is_enabled():
+                    return candidate
         return None
+
+    async def _wait_for_input(self, timeout_seconds: float | None = None) -> Locator | None:
+        """Wait for a client-rendered prompt composer without waiting forever."""
+        timeout = self.composer_wait_seconds if timeout_seconds is None else timeout_seconds
+        deadline = asyncio.get_running_loop().time() + timeout
+        while True:
+            field = await self._first_visible(self.selectors.input)
+            if field is not None:
+                return field
+            if asyncio.get_running_loop().time() >= deadline:
+                return None
+            await asyncio.sleep(0.2)
+
+    async def _input_not_found_message(self, reason: str = "was not found") -> str:
+        """Return actionable, credential-safe diagnostics for changed provider UIs."""
+        page = self._require_page()
+        host = urlsplit(page.url).hostname or "unknown host"
+        title = (await page.title()).strip()[:120] or "untitled page"
+        visible = await page.locator(
+            "textarea, [contenteditable='true'], [role='textbox'], input[type='text']"
+        ).count()
+        return (f"{self.name} prompt input {reason} after a bounded wait "
+                f"(page={host!r}, title={title!r}, editable_candidates={visible}). "
+                "Complete any visible login/onboarding dialog, then retry; if the page is ready, "
+                "the provider composer selectors may need updating.")
 
     async def _response_count(self) -> int:
         return sum((await self._response_counts()).values())

@@ -202,7 +202,7 @@ Browser login aur real provider websites manual integration checks hain, kyunki 
 | Voice `not_configured` | AssemblyAI key environment ya authenticated Voice form se set karein. |
 | Microphone unavailable | OS permission/input device check karein aur dependencies reinstall karein. Headless container mein host audio forwarding required hai. |
 | CAPTCHA/MFA/human-required | User takeover karke challenge manually complete karein; bypass attempt na karein. |
-| Provider selector failure | Provider UI change hua ho sakta hai; login state verify karke adapter selectors inspect/update karein. |
+| `prompt input was not found` | Page ko load hone ke liye bounded wait milta hai aur runtime hidden/disabled duplicate composers skip karta hai. Pehle login/onboarding popup complete karein. Error mein safe page host/title aur editable-candidate count dekhein; ready page par failure rahe to provider UI change ke liye adapter selectors inspect/update karein. |
 
 ## 10. Security boundary
 

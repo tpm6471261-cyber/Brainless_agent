@@ -6,7 +6,9 @@ class GeminiProvider(ChatbotProvider):
 
     def __init__(self, browser, url: str) -> None:
         super().__init__(browser, url, ProviderSelectors(
-            input=("rich-textarea textarea", "textarea[aria-label*='Enter a prompt']", "div[contenteditable='true']"),
+            input=("rich-textarea .ql-editor[contenteditable='true']", "rich-textarea textarea",
+                   "textarea[aria-label*='prompt' i]", "[aria-label*='prompt' i][contenteditable='true']",
+                   "div.ql-editor[contenteditable='true']", "[contenteditable='true'][role='textbox']"),
             response=("message-content", ".model-response-text"),
             stop=("button[aria-label*='Stop']",),
             copy=("button[aria-label*='Copy']",),
