@@ -34,6 +34,26 @@ class FakeResponsePage:
         return FakeResponseLocator(self.responses)
 
 
+class FakeStopLocator:
+    def __init__(self, visible: bool) -> None:
+        self.first = self
+        self.visible = visible
+
+    async def count(self) -> int:
+        return 1
+
+    async def is_visible(self) -> bool:
+        return self.visible
+
+
+class FakeStopPage:
+    def __init__(self, visible: dict[str, bool]) -> None:
+        self.visible = visible
+
+    def locator(self, selector: str) -> FakeStopLocator:
+        return FakeStopLocator(self.visible[selector])
+
+
 def test_provider_extracts_the_response_added_after_submission() -> None:
     async def scenario() -> None:
         page = FakeResponsePage(["Earlier assistant answer"])
@@ -43,5 +63,19 @@ def test_provider_extracts_the_response_added_after_submission() -> None:
         page.responses.append("Newest assistant answer")
 
         assert await provider.extract_response() == "Newest assistant answer"
+
+    asyncio.run(scenario())
+
+
+def test_provider_checks_async_stop_controls_without_using_async_generator_any() -> None:
+    async def scenario() -> None:
+        provider = ChatbotProvider(
+            None, "https://example.invalid", ProviderSelectors((), (), ("hidden", "visible"))
+        )
+        provider.page = FakeStopPage({"hidden": False, "visible": True})
+        assert await provider.is_response_complete() is False
+
+        provider.page = FakeStopPage({"hidden": False, "visible": False})
+        assert await provider.is_response_complete() is True
 
     asyncio.run(scenario())

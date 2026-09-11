@@ -96,6 +96,8 @@ def test_authorized_create_mission_uses_operator_and_validates_input(tmp_path):
     result = asyncio.run(gateway.execute(TOKEN, "create_mission", {"goal": "Monitor project", "priority": 4}))
     mission = runtime.missions.load(runtime.events.replay()[-1].mission_id)
     assert result["accepted"] and mission.goal == "Monitor project" and mission.priority == 4
+    assert sum(event.type is EventType.MISSION_TRIGGERED
+               for event in runtime.events.replay()) == 1
     with pytest.raises(ValueError):
         asyncio.run(gateway.execute(TOKEN, "create_mission", {"goal": ""}))
 

@@ -97,8 +97,11 @@ class ChatbotProvider(ABC):
 
     async def is_response_complete(self) -> bool:
         page = self._require_page()
-        return not any(await page.locator(selector).count() and await page.locator(selector).first.is_visible()
-                       for selector in self.selectors.stop)
+        for selector in self.selectors.stop:
+            locator = page.locator(selector)
+            if await locator.count() and await locator.first.is_visible():
+                return False
+        return True
 
     async def recover(self) -> None:
         page = self._require_page()

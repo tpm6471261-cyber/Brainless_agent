@@ -4,7 +4,7 @@ Planners may propose plans, but this module never executes their text.  The runt
 validates a plan against the parent agent, registered tools, and contracts first.
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 

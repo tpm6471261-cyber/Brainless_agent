@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from enum import Enum
 import json
 from pathlib import Path
-from typing import Callable, Any
+from typing import Callable
 from uuid import uuid4
 from app.autonomy.events import AutonomousEvent, AutonomousEventBus, EventType
 
