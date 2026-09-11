@@ -238,7 +238,6 @@ class DashboardService:
                 "status": "not_configured", "observations": 0, "average_latency_ms": None,
                 "elements": [], "windows": [], "sources": [], "screenshot_available": False},
             "capability_gaps": capability_gaps,
-                "elements": [], "sources": [], "screenshot_available": False},
         }
 
     def health(self) -> list[dict[str, str]]:
