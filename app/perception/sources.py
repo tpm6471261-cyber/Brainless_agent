@@ -5,12 +5,14 @@ from collections.abc import Awaitable, Callable
 import asyncio
 from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Protocol
 from hashlib import sha256
 from itertools import islice
 
 from app.perception.models import (PerceptionObservation, UIElement, WindowDisplayState,
                                    WindowInfo)
+from app.perception.models import PerceptionObservation, UIElement
 
 
 class PerceptionSource(Protocol):

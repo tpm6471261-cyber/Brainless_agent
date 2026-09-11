@@ -57,6 +57,7 @@ class AutonomousOperator:
         # PAUSED is an explicit operator decision. Merely receiving an unrelated
         # event must never make the mission runnable again.
         if mission.status in {MissionStatus.PAUSED, MissionStatus.BLOCKED}: return mission
+        if mission.status is MissionStatus.PAUSED: return mission
         snapshot = await self.perception.observe(mission_id)
         mission.current_state = snapshot.values(); mission.checkpoint["world_version"] = snapshot.version
         if self.takeover.mode is AutonomyMode.TAKEOVER:

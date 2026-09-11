@@ -105,6 +105,7 @@ class RuntimeCommandGateway:
                     {"original_mission_id": mission.mission_id, "cost_constraint": "free"}))
                 response = {"capability_status": assessment.status.value,
                             "discovery_mission_id": discovery.mission_id}
+            await self.runtime.operator.create(mission)
             mission_id = mission.mission_id
         elif requested in {DashboardCommand.PAUSE_MISSION, DashboardCommand.RESUME_MISSION,
                          DashboardCommand.CANCEL_MISSION}:
@@ -174,6 +175,7 @@ class RuntimeCommandGateway:
         ))
         return {"accepted": True, "command": requested.value,
                 "correlation_id": correlation_id, **response}
+        return {"accepted": True, "command": requested.value, "correlation_id": correlation_id}
 
 
 class DashboardService:
@@ -236,6 +238,7 @@ class DashboardService:
                 "status": "not_configured", "observations": 0, "average_latency_ms": None,
                 "elements": [], "windows": [], "sources": [], "screenshot_available": False},
             "capability_gaps": capability_gaps,
+                "elements": [], "sources": [], "screenshot_available": False},
         }
 
     def health(self) -> list[dict[str, str]]:
