@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 import json
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -75,6 +76,30 @@ def test_dashboard_http_api_auth_static_load_and_replay(tmp_path):
         assert json.loads(urlopen(request, timeout=2).read()) == []
     finally:
         server.close()
+
+
+def test_dashboard_http_snapshot_reads_sqlite_stores_created_on_runtime_thread(tmp_path):
+    from app.learning.core import SkillRegistry
+    from app.memory.sqlite_memory import SQLiteMemory
+
+    runtime, _, _ = dashboard(tmp_path)
+    memory = SQLiteMemory(tmp_path / "memory.db")
+    skills = SkillRegistry(tmp_path / "skills.db")
+    runtime = replace(runtime, memory=memory, skills=skills)
+    server = DashboardServer(DashboardService(runtime), RuntimeCommandGateway(runtime, TOKEN))
+    server.start()
+    host, port = server.address
+    request = Request(f"http://{host}:{port}/api/system",
+                      headers={"Authorization": f"Bearer {TOKEN}"})
+    try:
+        payload = json.loads(urlopen(request, timeout=2).read())
+        assert payload["skills"] == []
+        assert payload["memory"] == []
+        assert payload["inventory"]["skills"] == 0
+    finally:
+        server.close()
+        skills.close()
+        memory.close()
 
 
 def test_dashboard_event_history_survives_gateway_restart(tmp_path):

@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
+from threading import RLock
 from typing import Any
 from uuid import uuid4
 
@@ -143,7 +144,9 @@ class ExperienceMemory:
 
 class SkillRegistry:
     def __init__(self, path: Path) -> None:
-        self.db = sqlite3.connect(path); self.db.row_factory = sqlite3.Row
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = RLock()
+        self.db = sqlite3.connect(path, check_same_thread=False); self.db.row_factory = sqlite3.Row
         self.db.execute("""CREATE TABLE IF NOT EXISTS skills (id TEXT PRIMARY KEY, name TEXT NOT NULL, version INTEGER NOT NULL,
           status TEXT NOT NULL, payload_json TEXT NOT NULL, UNIQUE(name, version))""")
         self.db.execute("""CREATE TABLE IF NOT EXISTS skill_audit (event_id INTEGER PRIMARY KEY, skill_id TEXT NOT NULL,
@@ -155,39 +158,44 @@ class SkillRegistry:
                         (skill_id, event, actor, reason, datetime.now(timezone.utc).isoformat()))
 
     def audit_trail(self, skill_id: str) -> tuple[dict[str, str], ...]:
-        return tuple(dict(row) for row in self.db.execute("SELECT event,actor,reason,created_at FROM skill_audit WHERE skill_id=? ORDER BY event_id", (skill_id,)))
+        with self._lock:
+            return tuple(dict(row) for row in self.db.execute("SELECT event,actor,reason,created_at FROM skill_audit WHERE skill_id=? ORDER BY event_id", (skill_id,)))
 
     def register(self, skill: Skill) -> None:
         if skill.status in {SkillStatus.TRUSTED, SkillStatus.VERIFIED}:
             raise ValueError("Learned skills must enter as candidates and be evaluated first")
         if not skill.workflow: raise ValueError("A skill needs an executable workflow")
-        self.db.execute("INSERT INTO skills VALUES (?,?,?,?,?)", (skill.skill_id, skill.name, skill.version, skill.status.value, json.dumps(_skill_dict(skill), sort_keys=True)))
-        self._audit(skill.skill_id, "created", "system", "registered candidate")
-        self.db.commit()
+        with self._lock:
+            self.db.execute("INSERT INTO skills VALUES (?,?,?,?,?)", (skill.skill_id, skill.name, skill.version, skill.status.value, json.dumps(_skill_dict(skill), sort_keys=True)))
+            self._audit(skill.skill_id, "created", "system", "registered candidate")
+            self.db.commit()
 
-    def versions(self, name: str) -> list[Skill]: return [_skill(json.loads(row["payload_json"])) for row in self.db.execute("SELECT * FROM skills WHERE name=? ORDER BY version", (name,))]
+    def versions(self, name: str) -> list[Skill]:
+        with self._lock: return [_skill(json.loads(row["payload_json"])) for row in self.db.execute("SELECT * FROM skills WHERE name=? ORDER BY version", (name,))]
     def search(self, goal: str, *, statuses: tuple[SkillStatus, ...] = (SkillStatus.VERIFIED, SkillStatus.TRUSTED)) -> list[Skill]:
         wanted = set(_terms(goal)); return [skill for skill in self._all() if skill.status in statuses and wanted & set(_terms(skill.name + " " + skill.description))]
     def list_skills(self) -> tuple[Skill, ...]: return tuple(self._all())
-    def get(self, skill_id: str) -> Skill: return _skill(json.loads(self.db.execute("SELECT payload_json FROM skills WHERE id=?", (skill_id,)).fetchone()[0]))
+    def get(self, skill_id: str) -> Skill:
+        with self._lock: return _skill(json.loads(self.db.execute("SELECT payload_json FROM skills WHERE id=?", (skill_id,)).fetchone()[0]))
     def set_status(self, skill_id: str, status: SkillStatus, *, actor: str = "system", reason: str = "lifecycle transition") -> None:
-        skill = self.get(skill_id)
-        allowed = {
-            SkillStatus.UNTRUSTED: {SkillStatus.CANDIDATE, SkillStatus.REJECTED},
-            SkillStatus.CANDIDATE: {SkillStatus.TESTED, SkillStatus.VERIFIED, SkillStatus.REJECTED, SkillStatus.DEPRECATED},
-            SkillStatus.TESTED: {SkillStatus.VERIFIED, SkillStatus.REJECTED, SkillStatus.DEPRECATED},
-            SkillStatus.VERIFIED: {SkillStatus.TRUSTED, SkillStatus.DEPRECATED},
-            SkillStatus.TRUSTED: {SkillStatus.DEPRECATED},
-            SkillStatus.REJECTED: set(),
-            SkillStatus.DEPRECATED: set(),
-        }
-        if status is not skill.status and status not in allowed[skill.status]:
-            raise ValueError(f"Invalid skill lifecycle transition: {skill.status.value} -> {status.value}")
-        data = _skill_dict(skill)
-        data["status"] = status.value
-        self.db.execute("UPDATE skills SET status=?,payload_json=? WHERE id=?", (status.value, json.dumps(data, sort_keys=True), skill_id))
-        self._audit(skill_id, status.value, actor, reason)
-        self.db.commit()
+        with self._lock:
+            skill = self.get(skill_id)
+            allowed = {
+                SkillStatus.UNTRUSTED: {SkillStatus.CANDIDATE, SkillStatus.REJECTED},
+                SkillStatus.CANDIDATE: {SkillStatus.TESTED, SkillStatus.VERIFIED, SkillStatus.REJECTED, SkillStatus.DEPRECATED},
+                SkillStatus.TESTED: {SkillStatus.VERIFIED, SkillStatus.REJECTED, SkillStatus.DEPRECATED},
+                SkillStatus.VERIFIED: {SkillStatus.TRUSTED, SkillStatus.DEPRECATED},
+                SkillStatus.TRUSTED: {SkillStatus.DEPRECATED},
+                SkillStatus.REJECTED: set(),
+                SkillStatus.DEPRECATED: set(),
+            }
+            if status is not skill.status and status not in allowed[skill.status]:
+                raise ValueError(f"Invalid skill lifecycle transition: {skill.status.value} -> {status.value}")
+            data = _skill_dict(skill)
+            data["status"] = status.value
+            self.db.execute("UPDATE skills SET status=?,payload_json=? WHERE id=?", (status.value, json.dumps(data, sort_keys=True), skill_id))
+            self._audit(skill_id, status.value, actor, reason)
+            self.db.commit()
     def approve(self, skill_id: str, *, actor: str, reason: str) -> None:
         """Human approval is explicit and never grants runtime permissions."""
         skill = self.get(skill_id)
@@ -198,8 +206,10 @@ class SkillRegistry:
         self.set_status(skill_id, SkillStatus.REJECTED, actor=actor, reason=reason)
     def deprecate(self, skill_id: str, *, actor: str = "system", reason: str = "deprecated") -> None: self.set_status(skill_id, SkillStatus.DEPRECATED, actor=actor, reason=reason)
     def candidates(self) -> tuple[Skill, ...]: return tuple(skill for skill in self._all() if skill.status is SkillStatus.CANDIDATE)
-    def _all(self) -> list[Skill]: return [_skill(json.loads(row["payload_json"])) for row in self.db.execute("SELECT payload_json FROM skills")]
-    def close(self) -> None: self.db.close()
+    def _all(self) -> list[Skill]:
+        with self._lock: return [_skill(json.loads(row["payload_json"])) for row in self.db.execute("SELECT payload_json FROM skills")]
+    def close(self) -> None:
+        with self._lock: self.db.close()
 
 class WorkflowSynthesizer:
     """Composes discovered skills into a graph; returned graph is still advisory and must be validated."""
