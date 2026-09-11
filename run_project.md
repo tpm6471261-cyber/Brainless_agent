@@ -161,6 +161,12 @@ Yeh hint khud click/type nahi karta. Agent ka proposed action ab bhi target reso
 
 Perception page ka **Desktop windows** section active window ke saath `normal`, `minimized`, `maximized`, aur `fullscreen` states dikhata hai. Native window enumeration abhi Windows par supported hai. Unsupported OS par runtime fake state banane ke bajay source ko unavailable rakhta hai.
 
+### Jab requested skill available na ho
+
+Example: user `Edit my video and add subtitles` mission create karta hai. Runtime pehle registered tools aur reusable agents check karta hai. Agar real `video.edit` adapter nahi hai, original mission safely pause hota hai aur ek separate constrained research mission free/open-source local tools ya agents compare karta hai. Dashboard Overview par capability gap aur missing tool visible hote hain.
+
+Discovery ka matlab automatic trust ya installation nahi hai. Research mission purchase, signup, installation, private-file upload, aur external-agent execution nahi kar sakta. Candidate ko use karne se pehle real runtime adapter, permissions, policy/approval, sandboxing, and output verification required hain. Isliye personal agent new capabilities dhoondh sakta hai, lekin unavailable ability ka fake success claim nahi karega.
+
 ## 6. Voice setup aur push-to-talk
 
 1. `assemblyai[extras]` `requirements.txt` ke saath install hota hai.

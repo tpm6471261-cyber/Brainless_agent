@@ -24,6 +24,7 @@ from app.dashboard.runtime_bridge import RuntimeEventBridge
 from app.safety.permissions import Permission
 from app.autonomy.operator import AutonomyMode
 from app.autonomy.health import AgentHealthMonitor
+from app.autonomy.capability_broker import CapabilityBroker
 from app.voice import AssemblyAISpeechProvider, VoiceConfig, VoiceControlPlane, VoiceMode, VoiceService
 from app.voice.service import VoiceRuntimeRouter
 from app.voice.store import VoiceMetadataStore
@@ -110,7 +111,10 @@ async def serve() -> None:
         application.autonomous_actions, triggers=trigger_store, memory=application.memory,
         skills=application.skill_registry, provider_names=application.providers.names,
         mission_execution_status=execution_status, approval_system=approvals, voice=voice,
-        perception=multimodal_perception, user_guidance=user_guidance)
+        perception=multimodal_perception, user_guidance=user_guidance,
+        capability_broker=CapabilityBroker(application.agent_manager,
+                                           application.autonomous.registry,
+                                           application.autonomous.analyzer))
     gateway = RuntimeCommandGateway(runtime, token)
     server = DashboardServer(DashboardService(runtime), gateway, port=8765,
         event_loop=asyncio.get_running_loop())

@@ -54,6 +54,7 @@ class DashboardRuntime:
     voice: Any = None
     perception: Any = None
     user_guidance: Any = None
+    capability_broker: Any = None
 
 
 class RuntimeCommandGateway:
@@ -84,7 +85,26 @@ class RuntimeCommandGateway:
             if not -100 <= priority <= 100:
                 raise ValueError("Mission priority must be between -100 and 100")
             mission = Mission(goal, owner, priority=priority)
+            assessment = (self.runtime.capability_broker.assess(goal)
+                          if self.runtime.capability_broker else None)
             await self.runtime.operator.create(mission)
+            if assessment and assessment.status.value == "discovery_required":
+                mission.status = MissionStatus.PAUSED
+                mission.current_state["capability_assessment"] = assessment.snapshot()
+                mission.checkpoint["blocked_reason"] = "Required capability is not locally available"
+                mission.touch()
+                self.runtime.missions.save(mission)
+                discovery = self.runtime.capability_broker.discovery_mission(mission, assessment)
+                await self.runtime.operator.create(discovery)
+                await self.runtime.events.publish(AutonomousEvent(
+                    EventType.CAPABILITY_GAP, mission.mission_id,
+                    {"domain": assessment.domain, "missing_tools": list(assessment.missing_tools),
+                     "status": "paused", "discovery_mission_id": discovery.mission_id}))
+                await self.runtime.events.publish(AutonomousEvent(
+                    EventType.CAPABILITY_DISCOVERY_STARTED, discovery.mission_id,
+                    {"original_mission_id": mission.mission_id, "cost_constraint": "free"}))
+                response = {"capability_status": assessment.status.value,
+                            "discovery_mission_id": discovery.mission_id}
             mission_id = mission.mission_id
         elif requested in {DashboardCommand.PAUSE_MISSION, DashboardCommand.RESUME_MISSION,
                          DashboardCommand.CANCEL_MISSION}:
@@ -171,6 +191,14 @@ class DashboardService:
         events = self.events(task_missions=task_missions)
         statuses = [mission["status"] for mission in missions]
         pending_approvals = self._approvals()
+        capability_gaps = []
+        for mission in missions:
+            state = mission["current_state"]
+            assessment = state.get("capability_assessment")
+            if (isinstance(assessment, dict)
+                    and "capability_discovery_for" not in state
+                    and assessment.get("status") == "discovery_required"):
+                capability_gaps.append({"mission_id": mission["mission_id"], **assessment})
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "takeover_mode": self.runtime.operator.takeover.mode.value,
@@ -183,6 +211,7 @@ class DashboardService:
                 "failed_tasks": sum(task["status"] == "failed" for task in tasks),
                 "waiting_blocked": sum(status in {"waiting", "blocked", "awaiting_user"} for status in statuses),
                 "pending_approvals": len(pending_approvals),
+                "capability_gaps": len(capability_gaps),
             },
             "health": self.health(), "missions": missions, "tasks": tasks, "agents": agents,
             "schedules": schedules, "events": events, "actions": actions,
@@ -206,6 +235,7 @@ class DashboardService:
             "perception": self._perception() if self.runtime.perception else {
                 "status": "not_configured", "observations": 0, "average_latency_ms": None,
                 "elements": [], "windows": [], "sources": [], "screenshot_available": False},
+            "capability_gaps": capability_gaps,
         }
 
     def health(self) -> list[dict[str, str]]:

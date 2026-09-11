@@ -23,6 +23,7 @@ class EventType(str, Enum):
     UI_DETECTED="ui_detected"; TARGET_RESOLVED="target_resolved"; TARGET_RESOLUTION_FAILED="target_resolution_failed"
     HUMAN_REQUIRED="human_required"
     PERCEPTION_SOURCE_FAILED="perception_source_failed"
+    CAPABILITY_GAP="capability_gap"; CAPABILITY_DISCOVERY_STARTED="capability_discovery_started"
 
 @dataclass(frozen=True, slots=True)
 class AutonomousEvent:

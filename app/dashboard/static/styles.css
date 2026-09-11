@@ -20,3 +20,6 @@
 
 /* Low-friction onboarding and command feedback. */
 .quick-start{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:13px;background:linear-gradient(120deg,#142529,#101720)}.quick-start h2{font-size:18px;margin:2px 0}.quick-start p{margin:4px 0 0}.quick-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.button[aria-busy="true"]{cursor:wait;opacity:.65}.window-panel small{color:var(--muted)}@media(max-width:760px){.quick-start{align-items:stretch;flex-direction:column}.quick-actions{justify-content:stretch}.quick-actions .button{flex:1}}
+
+/* Capability acquisition is visible and never silently installs third-party code. */
+.capability-gap{margin-bottom:13px;border-color:#705827;background:linear-gradient(120deg,#2a2417,#141a20)}.capability-gap>div:first-child{margin-bottom:10px}.gap-row{display:grid;grid-template-columns:auto minmax(120px,.4fr) 1fr;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}.gap-row small{color:var(--muted)}@media(max-width:620px){.gap-row{grid-template-columns:auto 1fr}.gap-row small{grid-column:1/-1}}

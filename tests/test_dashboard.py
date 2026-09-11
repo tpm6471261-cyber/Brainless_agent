@@ -196,4 +196,5 @@ def test_dashboard_assets_expose_quick_start_guidance_and_window_states():
     assert "QUICK START" in script
     assert "Guide agent on screen" in script
     assert "Desktop windows" in script
+    assert "CAPABILITY DISCOVERY" in script
     assert "state === 'minimized'" in script and "state === 'maximized'" in script

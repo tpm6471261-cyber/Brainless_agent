@@ -178,6 +178,10 @@ When no `BRAINLESS_DASHBOARD_TOKEN` is configured, `run.py` generates a cryptogr
 
 The Perception page also shows real desktop-window inventory with active, normal, minimized, maximized, and fullscreen states when native enumeration is available. Window-state collection currently uses PyGetWindow's supported Windows backend; other platforms remain explicitly unavailable rather than reporting guessed state.
 
+### Capability-first personal agent
+
+Before accepting a specialized objective, the runtime capability broker checks its registered tools and reusable agents. For example, a video-editing request requires a real `video.edit` capability; generic mouse/process access is not misrepresented as a video editor. If no compatible local agent or tool exists, the requested mission is safely paused and a separate browser-research mission is created to compare free/open-source local options. Discovery is constrained to research: it cannot install software, create an account, purchase a service, upload private media, or execute an external agent. A discovered option becomes usable only after a real adapter is registered and the normal permission, governor, approval, and verification checks pass.
+
 ### Desktop UI
 
 Run `python run_gui.py` to launch the Tk desktop UI. It provides a task editor, provider checkboxes, strategy and prompt-profile selectors, Start, cooperative Pause/Resume, Emergency Stop, current status, an in-window result/error log, and a refreshable local task-history table. The browser closes after each GUI run while the persistent profile remains for the next run. Pause takes effect at the next action boundary. Emergency Stop cancels the in-flight browser operation and records the failure state; it does not bypass, dismiss, or otherwise alter provider security pages.
