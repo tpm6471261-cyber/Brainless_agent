@@ -210,17 +210,6 @@ class SkillRegistry:
             self.db.execute("UPDATE skills SET status=?,payload_json=? WHERE id=?", (status.value, json.dumps(data, sort_keys=True), skill_id))
             self._audit(skill_id, status.value, actor, reason)
             self.db.commit()
-    def update_evaluation(self, skill_id: str, evaluation: dict[str, float]) -> Skill:
-        """Persist metrics without changing a skill's authority or lifecycle status."""
-        with self._lock:
-            skill = self.get(skill_id)
-            data = _skill_dict(skill)
-            data["evaluation"] = dict(evaluation)
-            self.db.execute("UPDATE skills SET payload_json=? WHERE id=?",
-                            (json.dumps(data, sort_keys=True), skill_id))
-            self._audit(skill_id, "evaluated", "learning_loop", "runtime evidence updated")
-            self.db.commit()
-            return self.get(skill_id)
     def approve(self, skill_id: str, *, actor: str, reason: str) -> None:
         """Human approval is explicit and never grants runtime permissions."""
         skill = self.get(skill_id)
