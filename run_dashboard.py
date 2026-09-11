@@ -27,7 +27,7 @@ from app.autonomy.health import AgentHealthMonitor
 from app.voice import AssemblyAISpeechProvider, VoiceConfig, VoiceControlPlane, VoiceMode, VoiceService
 from app.voice.service import VoiceRuntimeRouter
 from app.voice.store import VoiceMetadataStore
-from app.perception import (ComputerControllerSource, FilesystemPerceptionSource,
+from app.perception import (ComputerControllerSource, DesktopWindowPerceptionSource, FilesystemPerceptionSource,
                             MultimodalPerceptionEngine, UserGuidancePerceptionSource)
 
 
@@ -94,8 +94,10 @@ async def serve() -> None:
 
     voice = VoiceControlPlane(create_voice)
     user_guidance = UserGuidancePerceptionSource(root / "screenshots")
+    desktop_windows = DesktopWindowPerceptionSource()
     multimodal_perception = MultimodalPerceptionEngine((ComputerControllerSource(
-        application.autonomous_actions.controller), FilesystemPerceptionSource(root), user_guidance), events,
+        application.autonomous_actions.controller), desktop_windows,
+        FilesystemPerceptionSource(root), user_guidance), events,
         world=application.autonomous_actions.world_state,
         capability_authorizer=lambda agent_id: set(application.agent_manager.get_agent(agent_id).permissions))
     multimodal_perception.on_human_required = lambda _: operator.takeover.begin()

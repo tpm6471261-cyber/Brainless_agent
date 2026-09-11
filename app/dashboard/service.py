@@ -205,7 +205,7 @@ class DashboardService:
                 "current_transcript": "", "final_transcript": "", "error": None},
             "perception": self._perception() if self.runtime.perception else {
                 "status": "not_configured", "observations": 0, "average_latency_ms": None,
-                "elements": [], "sources": [], "screenshot_available": False},
+                "elements": [], "windows": [], "sources": [], "screenshot_available": False},
         }
 
     def health(self) -> list[dict[str, str]]:

@@ -110,6 +110,8 @@ class MultimodalPerceptionEngine:
                 "ui_elements": tuple(
                     item.element_id for item in snapshot.visible_elements
                 ),
+                "windows": tuple({"window_id": item.window_id, "state": item.state.value,
+                                  "active": item.active} for item in snapshot.windows),
             }
             for key, value in facts.items():
                 if value is not None:
@@ -196,6 +198,13 @@ class MultimodalPerceptionEngine:
             ]
             if current
             else [],
+            "windows": [
+                {"window_id": item.window_id, "title": item.title,
+                 "application": item.application, "state": item.state.value,
+                 "bounds": item.bounds, "active": item.active, "visible": item.visible,
+                 "source": item.source, "confidence": item.confidence}
+                for item in current.windows[:200]
+            ] if current else [],
             "sources": list(current.source_metadata) if current else [],
         }
 
@@ -227,4 +236,5 @@ class MultimodalPerceptionEngine:
             voice_context=observation.voice_context
             if "voice.read" in capabilities
             else {},
+            windows=observation.windows if window else (),
         )

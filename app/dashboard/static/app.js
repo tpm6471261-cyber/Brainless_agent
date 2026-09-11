@@ -65,7 +65,8 @@ function overview() {
   const cards = Object.entries(metrics).map(([key, value], index) => `<article class="card ${index < 3 ? 'accent' : ''}"><span>${esc(key.replaceAll('_', ' ').toUpperCase())}</span><strong>${value}</strong><small>${value === 0 ? 'No current records' : 'Live runtime count'}</small></article>`).join('');
   const activity = events.slice(-9).reverse().map(event => `<div class="row"><div><b>${esc(event.event_type.replaceAll('_', ' '))}</b><br><small>${esc(event.mission_id || 'System')} · ${esc(event.payload?.command || event.payload?.error || event.status || 'Runtime event')}</small></div><time>${formatTime(event.timestamp)}</time></div>`).join('') || empty('events');
   const components = health.slice(0, 9).map(item => `<div class="row"><span>${esc(item.component.replaceAll('_', ' '))}</span>${status(item.status)}</div>`).join('');
-  return `<div class="cards">${cards}</div><div class="grid"><section class="panel"><div class="panel-header"><h2>Live activity</h2><small>${events.length} retained events</small></div><div class="timeline">${activity}</div></section><section class="panel"><div class="panel-header"><h2>Component health</h2><small>Last snapshot</small></div>${components}</section></div>`;
+  const quickStart = `<section class="panel quick-start"><div><p class="eyebrow">QUICK START</p><h2>What would you like to do?</h2><p class="muted">Observe the desktop, point out a control, or create an outcome-focused mission.</p></div><div class="quick-actions"><button class="button" data-open-view="perception">◉ Observe & guide</button><button class="button" data-open-view="voice">◖ Speak a command</button><button class="button button-primary" data-open-mission>＋ Create mission</button></div></section>`;
+  return `${quickStart}<div class="cards">${cards}</div><div class="grid"><section class="panel"><div class="panel-header"><h2>Live activity</h2><small>${events.length} retained events</small></div><div class="timeline">${activity}</div></section><section class="panel"><div class="panel-header"><h2>Component health</h2><small>Last snapshot</small></div>${components}</section></div>`;
 }
 
 function voice() {
@@ -79,9 +80,12 @@ function perception() {
   const view = state.data.perception;
   const latency = view.average_latency_ms == null ? 'N/A' : `${Math.round(view.average_latency_ms)} ms`;
   const sourceNames = (view.sources || []).map(item => item.source).join(', ') || 'No observation yet';
+  const windows = view.windows || [];
+  const minimized = windows.filter(item => item.state === 'minimized').length;
+  const maximized = windows.filter(item => item.state === 'maximized' || item.state === 'fullscreen').length;
   const flow = ['OBSERVE', 'UNDERSTAND', 'TARGET', 'ACTION', 'OBSERVE', 'VERIFY']
     .map((step, index) => `<span>${esc(step)}</span>${index < 5 ? '<i>→</i>' : ''}`).join('');
-  return `<div class="perception-toolbar"><button class="button button-primary" data-command="observe_environment">Observe now</button><button class="button" data-guide-region>Guide agent on screen</button><small>Selection creates a semantic hint through the runtime and never performs an action.</small></div><div class="cards"><article class="card accent"><span>PERCEPTION</span><strong>${esc(view.status).toUpperCase()}</strong><small>${view.observations} authorized observations</small></article><article class="card"><span>CONFIDENCE</span><strong>${view.confidence == null ? 'N/A' : Math.round(view.confidence * 100) + '%'}</strong><small>Fused source confidence</small></article><article class="card"><span>UI ELEMENTS</span><strong>${view.elements.length}</strong><small>Visible structured elements</small></article><article class="card"><span>AVG LATENCY</span><strong>${latency}</strong><small>Observed runtime measurements</small></article></div><div class="perception-flow">${flow}</div><div class="grid"><section class="panel"><div class="panel-header"><h2>Environment</h2>${status(view.status)}</div><dl class="environment-list"><dt>Application</dt><dd>${esc(view.active_application)}</dd><dt>Window</dt><dd>${esc(view.active_window)}</dd><dt>Browser URL</dt><dd>${esc(view.browser?.url)}</dd><dt>Observed</dt><dd>${formatDate(view.timestamp)}</dd><dt>Sources</dt><dd>${esc(sourceNames)}</dd><dt>Screenshot</dt><dd>${view.screenshot_available ? 'AVAILABLE' : 'UNAVAILABLE'}</dd></dl>${view.screenshot_available ? '<div class="screen-preview"><span>Loading authorized capture…</span></div>' : ''}</section><section class="panel"><h2>Trust boundary</h2><p class="muted">DOM, accessibility, OCR, screenshots, and webpage text are untrusted observation data. They cannot create commands, grant permissions, mutate policy, or execute tools.</p><p class="muted">An owner-selected region is a semantic hint only. The runtime must still resolve, authorize, execute, observe, and verify any proposed action.</p></section></div><section style="margin-top:13px">${table(['Role', 'Label / text', 'Source', 'Confidence', 'Bounds', 'State'], view.elements.map(item => `<tr><td>${status(item.role)}</td><td><b>${esc(item.label || item.text)}</b></td><td>${esc(item.source)}</td><td>${Math.round(item.confidence * 100)}%</td><td><code>${esc(item.bounds ? item.bounds.join(', ') : 'semantic')}</code></td><td>${item.clickable ? 'Clickable' : item.editable ? 'Editable' : 'Read only'}</td></tr>`), 'UI elements')}</section>`;
+  return `<div class="perception-toolbar"><button class="button button-primary" data-command="observe_environment">Observe now</button><button class="button" data-guide-region>Guide agent on screen</button><small>Selection creates a semantic hint through the runtime and never performs an action.</small></div><div class="cards"><article class="card accent"><span>PERCEPTION</span><strong>${esc(view.status).toUpperCase()}</strong><small>${view.observations} authorized observations</small></article><article class="card"><span>CONFIDENCE</span><strong>${view.confidence == null ? 'N/A' : Math.round(view.confidence * 100) + '%'}</strong><small>Fused source confidence</small></article><article class="card"><span>WINDOWS</span><strong>${windows.length}</strong><small>${minimized} minimized · ${maximized} maximized</small></article><article class="card"><span>AVG LATENCY</span><strong>${latency}</strong><small>Observed runtime measurements</small></article></div><div class="perception-flow">${flow}</div><div class="grid"><section class="panel"><div class="panel-header"><h2>Environment</h2>${status(view.status)}</div><dl class="environment-list"><dt>Application</dt><dd>${esc(view.active_application)}</dd><dt>Window</dt><dd>${esc(view.active_window)}</dd><dt>Browser URL</dt><dd>${esc(view.browser?.url)}</dd><dt>Observed</dt><dd>${formatDate(view.timestamp)}</dd><dt>Sources</dt><dd>${esc(sourceNames)}</dd><dt>Screenshot</dt><dd>${view.screenshot_available ? 'AVAILABLE' : 'UNAVAILABLE'}</dd></dl>${view.screenshot_available ? '<div class="screen-preview"><span>Loading authorized capture…</span></div>' : ''}</section><section class="panel"><h2>Trust boundary</h2><p class="muted">DOM, accessibility, OCR, screenshots, and webpage text are untrusted observation data. They cannot create commands, grant permissions, mutate policy, or execute tools.</p><p class="muted">An owner-selected region is a semantic hint only. The runtime must still resolve, authorize, execute, observe, and verify any proposed action.</p></section></div><section style="margin-top:13px">${table(['Role', 'Label / text', 'Source', 'Confidence', 'Bounds', 'State'], view.elements.map(item => `<tr><td>${status(item.role)}</td><td><b>${esc(item.label || item.text)}</b></td><td>${esc(item.source)}</td><td>${Math.round(item.confidence * 100)}%</td><td><code>${esc(item.bounds ? item.bounds.join(', ') : 'semantic')}</code></td><td>${item.clickable ? 'Clickable' : item.editable ? 'Editable' : 'Read only'}</td></tr>`), 'UI elements')}</section><section class="panel window-panel" style="margin-top:13px"><div class="panel-header"><h2>Desktop windows</h2><small>Active, minimized, maximized and fullscreen state</small></div>${table(['Window', 'State', 'Active', 'Visible', 'Bounds'], windows.map(item => `<tr><td><b>${esc(item.title)}</b><br><small>${esc(item.application || item.source)}</small></td><td>${status(item.state)}</td><td>${item.active ? 'Yes' : 'No'}</td><td>${item.visible ? 'Yes' : 'No'}</td><td><code>${esc(item.bounds ? item.bounds.join(', ') : 'Unavailable')}</code></td></tr>`), 'desktop windows')}</section>`;
 }
 
 function missions() {
@@ -173,7 +177,7 @@ function render() {
   $('#takeover').textContent = state.data.takeover_mode === 'takeover' ? 'Return control' : 'Take control';
   document.querySelectorAll('nav button').forEach(button => button.classList.toggle('active', button.dataset.view === state.view));
   setConnection('online', 'Runtime online');
-  if (state.view === 'perception' && state.data.perception.screenshot_reference) loadPerceptionScreenshot();
+  if (state.view === 'perception' && state.data.perception.screenshot_available) loadPerceptionScreenshot();
 }
 
 async function loadPerceptionScreenshot() {
@@ -233,11 +237,15 @@ async function stream() {
 }
 
 async function command(name, payload = {}) {
+  const controls = [...document.querySelectorAll(`[data-command="${name}"]`)];
+  controls.forEach(control => { control.disabled = true; control.setAttribute('aria-busy', 'true'); });
   try {
-    await api('/api/commands', {method: 'POST', body: JSON.stringify({command: name, payload})});
-    toast(`${name.replaceAll('_', ' ')} accepted by runtime`);
+    const result = await api('/api/commands', {method: 'POST', body: JSON.stringify({command: name, payload})});
+    toast(`${name.replaceAll('_', ' ')} completed`);
     await refresh({quiet: true});
-  } catch (error) { toast(error.message, 'error'); }
+    return result;
+  } catch (error) { toast(error.message, 'error'); return null; }
+  finally { controls.forEach(control => { control.disabled = false; control.removeAttribute('aria-busy'); }); }
 }
 
 document.querySelectorAll('nav button').forEach(button => button.addEventListener('click', () => {
@@ -251,6 +259,8 @@ $('#menu').addEventListener('click', event => { const open = $('#sidebar').class
 $('#refresh').addEventListener('click', () => refresh());
 $('#takeover').addEventListener('click', () => command(state.data?.takeover_mode === 'takeover' ? 'release_takeover' : 'take_over'));
 $('#newMission').addEventListener('click', () => $('#missionDialog').showModal());
+$('#content').addEventListener('click', event => { const button = event.target.closest('[data-open-view]'); if (!button) return; state.view = button.dataset.openView; location.hash = state.view; render(); });
+$('#content').addEventListener('click', event => { if (event.target.closest('[data-open-mission]')) $('#missionDialog').showModal(); });
 $('#connect').addEventListener('click', event => { event.preventDefault(); state.token = $('#token').value.trim(); sessionStorage.setItem('ba-token', state.token); $('#auth').close(); refresh(); stream(); });
 $('#submitMission').addEventListener('click', event => { event.preventDefault(); const goal = $('#missionGoal').value.trim(); if (!goal) return $('#missionGoal').reportValidity(); $('#missionDialog').close(); command('create_mission', {goal, priority: Number($('#missionPriority').value)}); $('#missionGoal').value = ''; });
 $('#submitVoiceConfig').addEventListener('click', async event => { event.preventDefault(); const input = $('#assemblyApiKey'); if (!input.reportValidity()) return; const payload = {api_key: input.value.trim(), model: $('#assemblyModel').value.trim(), min_confidence: Number($('#voiceConfidence').value)}; const language = $('#voiceLanguage').value.trim(); if (language) payload.language = language; input.value = ''; $('#voiceDialog').close(); await command('configure_voice', payload); });

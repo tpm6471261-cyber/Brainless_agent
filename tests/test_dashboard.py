@@ -185,3 +185,15 @@ def test_dashboard_screen_guidance_is_authenticated_and_flows_to_perception(tmp_
         assert perception.requests[0].capabilities == frozenset({"screen.read"})
 
     asyncio.run(scenario())
+
+
+def test_dashboard_assets_expose_quick_start_guidance_and_window_states():
+    from pathlib import Path
+    static = Path("app/dashboard/static")
+    markup = (static / "index.html").read_text(encoding="utf-8")
+    script = (static / "app.js").read_text(encoding="utf-8")
+    assert "guidanceDialog" in markup
+    assert "QUICK START" in script
+    assert "Guide agent on screen" in script
+    assert "Desktop windows" in script
+    assert "state === 'minimized'" in script and "state === 'maximized'" in script

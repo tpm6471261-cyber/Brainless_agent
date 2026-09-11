@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+import asyncio
 from pathlib import Path
+import sys
 from typing import Protocol
 from hashlib import sha256
 from itertools import islice
 
-from app.perception.models import PerceptionObservation, UIElement
+from app.perception.models import (PerceptionObservation, UIElement, WindowDisplayState,
+                                   WindowInfo)
 
 
 class PerceptionSource(Protocol):
@@ -92,3 +95,63 @@ class FilesystemPerceptionSource:
         self._previous = current
         return PerceptionObservation(self.name, "filesystem", filesystem_changes=changes,
                                      confidence=1.0, metadata={"file_count": len(current)})
+
+
+class DesktopWindowPerceptionSource:
+    """Read real desktop window geometry and minimize/maximize state where supported."""
+
+    name = "desktop_windows"
+    capabilities = frozenset({"window.read"})
+
+    def __init__(self, backend=None, screen_size: Callable[[], tuple[int, int]] | None = None,
+                 limit: int = 200) -> None:
+        self._backend = backend
+        self._screen_size = screen_size
+        self.limit = max(1, min(limit, 500))
+
+    @property
+    def available(self) -> bool:
+        # PyGetWindow currently implements reliable enumeration on Windows.
+        return self._backend is not None or sys.platform == "win32"
+
+    async def observe(self) -> PerceptionObservation:
+        return await asyncio.to_thread(self._observe_sync)
+
+    def _observe_sync(self) -> PerceptionObservation:
+        backend = self._backend
+        if backend is None:
+            import pygetwindow as backend
+        if self._screen_size is None:
+            import pyautogui
+            screen_dimensions = tuple(pyautogui.size())
+        else:
+            screen_dimensions = tuple(self._screen_size())
+        windows: list[WindowInfo] = []
+        for index, window in enumerate(backend.getAllWindows()[:self.limit]):
+            title = str(getattr(window, "title", "")).strip()
+            bounds = (int(window.left), int(window.top), max(0, int(window.width)),
+                      max(0, int(window.height)))
+            minimized = bool(getattr(window, "isMinimized", False))
+            maximized = bool(getattr(window, "isMaximized", False))
+            if minimized:
+                state = WindowDisplayState.MINIMIZED
+            elif maximized:
+                state = WindowDisplayState.MAXIMIZED
+            elif bounds[0] <= 0 and bounds[1] <= 0 and bounds[2] >= screen_dimensions[0] \
+                    and bounds[3] >= screen_dimensions[1]:
+                state = WindowDisplayState.FULLSCREEN
+            else:
+                state = WindowDisplayState.NORMAL
+            native_handle = getattr(window, "_hWnd", None)
+            identity = native_handle if native_handle is not None else f"{index}:{title}"
+            identifier = sha256(f"window:{identity}".encode()).hexdigest()[:24]
+            windows.append(WindowInfo(
+                identifier, title or "Untitled window", state, bounds,
+                active=bool(getattr(window, "isActive", False)),
+                visible=not minimized and bounds[2] > 0 and bounds[3] > 0,
+                source=self.name, confidence=1.0))
+        active = next((window.title for window in windows if window.active), None)
+        return PerceptionObservation(
+            self.name, "window", active_window=active, screen_dimensions=screen_dimensions,
+            windows=tuple(windows), confidence=1.0,
+            metadata={"window_count": len(windows), "state_support": "native"})

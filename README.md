@@ -176,6 +176,8 @@ python run.py cli   # legacy interactive task CLI
 
 When no `BRAINLESS_DASHBOARD_TOKEN` is configured, `run.py` generates a cryptographically random per-run token and prints it to the local terminal. The Perception page can accept an explicit owner-labelled desktop rectangle (for example, “Search box” or “Continue button”); the selection becomes non-executable perception evidence and still passes through normal target resolution, policy, permission, execution, observation, and verification boundaries.
 
+The Perception page also shows real desktop-window inventory with active, normal, minimized, maximized, and fullscreen states when native enumeration is available. Window-state collection currently uses PyGetWindow's supported Windows backend; other platforms remain explicitly unavailable rather than reporting guessed state.
+
 ### Desktop UI
 
 Run `python run_gui.py` to launch the Tk desktop UI. It provides a task editor, provider checkboxes, strategy and prompt-profile selectors, Start, cooperative Pause/Resume, Emergency Stop, current status, an in-window result/error log, and a refreshable local task-history table. The browser closes after each GUI run while the persistent profile remains for the next run. Pause takes effect at the next action boundary. Emergency Stop cancels the in-flight browser operation and records the failure state; it does not bypass, dismiss, or otherwise alter provider security pages.

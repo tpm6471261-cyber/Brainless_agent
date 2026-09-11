@@ -19,7 +19,7 @@ class TargetQuery:
 
 class ScreenGroundingEngine:
     """Ranks semantic evidence before geometry; ambiguity fails closed."""
-    SOURCE_PRIORITY = {"accessibility": 6, "dom": 5, "application": 4,
+    SOURCE_PRIORITY = {"user_guidance": 7, "accessibility": 6, "dom": 5, "application": 4,
                        "ocr": 3, "visual": 2, "controller": 1}
 
     def resolve(self, query: TargetQuery | str, snapshot: EnvironmentSnapshot,

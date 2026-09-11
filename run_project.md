@@ -159,6 +159,8 @@ python run.py
 
 Yeh hint khud click/type nahi karta. Agent ka proposed action ab bhi target resolution, governor, policy, permission, tool execution, re-observation, aur verification se guzarta hai. Selection 20 seconds mein cancel ho jati hai aur local graphical desktop session required hai.
 
+Perception page ka **Desktop windows** section active window ke saath `normal`, `minimized`, `maximized`, aur `fullscreen` states dikhata hai. Native window enumeration abhi Windows par supported hai. Unsupported OS par runtime fake state banane ke bajay source ko unavailable rakhta hai.
+
 ## 6. Voice setup aur push-to-talk
 
 1. `assemblyai[extras]` `requirements.txt` ke saath install hota hai.

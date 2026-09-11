@@ -12,8 +12,10 @@ from app.perception.context import CommandSource, ContextBuilder, MultimodalComm
 from app.perception.engine import MultimodalPerceptionEngine, PerceptionRequest
 from app.perception.fusion import PerceptionFusionEngine
 from app.perception.grounding import ScreenGroundingEngine
-from app.perception.models import PerceptionObservation, UIElement
-from app.perception.sources import ComputerControllerSource, FilesystemPerceptionSource
+from app.perception.models import (PerceptionObservation, UIElement, WindowDisplayState,
+                                   WindowInfo)
+from app.perception.sources import (ComputerControllerSource, DesktopWindowPerceptionSource,
+                                    FilesystemPerceptionSource)
 from app.perception.user_guidance import ScreenRegion, UserGuidancePerceptionSource
 from tests.test_voice import runtime
 
@@ -223,7 +225,59 @@ def test_owner_selected_region_becomes_semantic_evidence_without_execution(tmp_p
         snapshot = await engine.observe(PerceptionRequest(frozenset({"screen.read"}), "owner hint"))
         assert snapshot.interactive_elements == (element,)
         assert engine.snapshot()["elements"][0]["label"] == "Search box"
+        target = ScreenGroundingEngine().resolve("type in the Search textbox", snapshot)
+        assert target and target.target_id == element.element_id
 
         with pytest.raises(ValueError, match="Unsupported guidance role"):
             await source.select("danger", "shell-command")
     asyncio.run(scenario())
+
+
+def test_desktop_window_source_reports_minimized_maximized_and_active_states():
+    class Window:
+        def __init__(self, title, *, minimized=False, maximized=False, active=False,
+                     bounds=(10, 20, 800, 600)):
+            self.title = title
+            self.isMinimized = minimized
+            self.isMaximized = maximized
+            self.isActive = active
+            self.left, self.top, self.width, self.height = bounds
+
+    class Backend:
+        @staticmethod
+        def getAllWindows():
+            return [Window("Editor", maximized=True, active=True, bounds=(0, 0, 1920, 1080)),
+                    Window("Notes", minimized=True)]
+
+    async def scenario():
+        source = DesktopWindowPerceptionSource(Backend(), screen_size=lambda: (1920, 1080))
+        observation = await source.observe()
+        assert observation.active_window == "Editor"
+        assert observation.windows[0].state is WindowDisplayState.MAXIMIZED
+        assert observation.windows[0].active and observation.windows[0].visible
+        assert observation.windows[1].state is WindowDisplayState.MINIMIZED
+        assert not observation.windows[1].visible
+
+        engine = MultimodalPerceptionEngine((source,), AutonomousEventBus())
+        snapshot = await engine.observe(PerceptionRequest(frozenset({"window.read"}), "window states"))
+        projected = engine.snapshot()["windows"]
+        assert [item["state"] for item in projected] == ["maximized", "minimized"]
+        assert snapshot.windows == observation.windows
+
+    asyncio.run(scenario())
+
+
+def test_window_minimize_and_focus_changes_are_structural_drift():
+    normal = WindowInfo("editor", "Editor", WindowDisplayState.NORMAL, active=True, confidence=1)
+    minimized = WindowInfo("editor", "Editor", WindowDisplayState.MINIMIZED,
+                           active=False, visible=False, confidence=1)
+    before = PerceptionFusionEngine().fuse((PerceptionObservation("windows", "window",
+                                                                  windows=(normal,)),))
+    after = PerceptionFusionEngine().fuse((PerceptionObservation("windows", "window",
+                                                                 windows=(minimized,)),))
+    changes = VisualChangeDetector().compare(before, after)
+    kinds = {item.kind for item in changes}
+    assert {"window_state_changed", "window_focus_changed"} <= kinds
+    state_change = next(item for item in changes if item.kind == "window_state_changed")
+    assert state_change.detail == {"window_id": "editor", "before": "normal",
+                                   "after": "minimized"}

@@ -3,8 +3,36 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any
 from uuid import uuid4
+
+
+class WindowDisplayState(str, Enum):
+    NORMAL = "normal"
+    MINIMIZED = "minimized"
+    MAXIMIZED = "maximized"
+    FULLSCREEN = "fullscreen"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class WindowInfo:
+    window_id: str
+    title: str
+    state: WindowDisplayState = WindowDisplayState.UNKNOWN
+    bounds: tuple[int, int, int, int] | None = None
+    application: str | None = None
+    active: bool = False
+    visible: bool = True
+    source: str = "unknown"
+    confidence: float = 0.0
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.confidence <= 1:
+            raise ValueError("Window confidence must be between zero and one")
+        if self.bounds and (len(self.bounds) != 4 or self.bounds[2] < 0 or self.bounds[3] < 0):
+            raise ValueError("Window bounds must be x, y, width, height")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +77,7 @@ class PerceptionObservation:
     confidence: float = 1.0
     metadata: dict[str, Any] = field(default_factory=dict)
     trusted_as_instruction: bool = False
+    windows: tuple[WindowInfo, ...] = ()
 
     def __post_init__(self) -> None:
         if self.trusted_as_instruction:
@@ -75,6 +104,7 @@ class EnvironmentSnapshot:
     recent_actions: tuple[str, ...]
     confidence: float
     source_metadata: tuple[dict[str, Any], ...]
+    windows: tuple[WindowInfo, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
