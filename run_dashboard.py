@@ -41,10 +41,6 @@ def dashboard_token(environment: dict[str, str] | None = None) -> tuple[str, boo
             raise ValueError("BRAINLESS_DASHBOARD_TOKEN must contain at least 16 characters")
         return configured, False
     return secrets.token_urlsafe(24), True
-from app.voice import AssemblyAISpeechProvider, VoiceConfig, VoiceControlPlane, VoiceMode, VoiceService
-from app.voice.service import VoiceRuntimeRouter
-from app.voice.store import VoiceMetadataStore
-from app.perception import ComputerControllerSource, FilesystemPerceptionSource, MultimodalPerceptionEngine
 
 
 async def _pump(bridge: RuntimeEventBridge, health: AgentHealthMonitor) -> None:
@@ -65,9 +61,6 @@ async def serve() -> None:
         token, generated = dashboard_token()
     except ValueError as error:
         raise SystemExit(str(error)) from error
-    token = os.environ.get("BRAINLESS_DASHBOARD_TOKEN", "")
-    if len(token) < 16:
-        raise SystemExit("Set BRAINLESS_DASHBOARD_TOKEN to at least 16 characters")
     root = Path(__file__).resolve().parent
     application = Application(root, load_settings())
     event_store = EventStore(root / "data/dashboard-events.db")
@@ -106,8 +99,6 @@ async def serve() -> None:
     multimodal_perception = MultimodalPerceptionEngine((ComputerControllerSource(
         application.autonomous_actions.controller), desktop_windows,
         FilesystemPerceptionSource(root), user_guidance), events,
-    multimodal_perception = MultimodalPerceptionEngine((ComputerControllerSource(
-        application.autonomous_actions.controller), FilesystemPerceptionSource(root)), events,
         world=application.autonomous_actions.world_state,
         capability_authorizer=lambda agent_id: set(application.agent_manager.get_agent(agent_id).permissions))
     multimodal_perception.on_human_required = lambda _: operator.takeover.begin()
@@ -124,7 +115,6 @@ async def serve() -> None:
         capability_broker=CapabilityBroker(application.agent_manager,
                                            application.autonomous.registry,
                                            application.autonomous.analyzer))
-        perception=multimodal_perception)
     gateway = RuntimeCommandGateway(runtime, token)
     server = DashboardServer(DashboardService(runtime), gateway, port=8765,
         event_loop=asyncio.get_running_loop())
@@ -141,7 +131,6 @@ async def serve() -> None:
         print("A secure per-run token was generated because BRAINLESS_DASHBOARD_TOKEN was not set.")
     if os.environ.get("BRAINLESS_DASHBOARD_AUTO_OPEN", "true").casefold() not in {"0", "false", "no"}:
         webbrowser.open(url, new=2)
-    print("Command Center: http://127.0.0.1:8765")
     try:
         await asyncio.Event().wait()
     finally:

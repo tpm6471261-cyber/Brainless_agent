@@ -19,6 +19,7 @@ class LearningConfig:
     minimum_skill_success_rate: float = .8
     max_candidate_skills: int = 20
     require_human_approval_for_skill_activation: bool = True
+    minimum_evaluation_runs: int = 2
 
 @dataclass(frozen=True, slots=True)
 class WorkflowAdvice:
@@ -103,11 +104,33 @@ class LearningCoordinator:
         self.experiences.store(experience)
         if not self.config.skill_learning_enabled or not candidate_name or not candidate_description:
             return None
-        candidate = ExecutionEvaluator().candidate(experience, candidate_name, candidate_description)
-        if candidate is None: return None
-        if len(self.skills.candidates()) >= self.config.max_candidate_skills: return None
-        self.skills.register(candidate)
-        return candidate
+        versions = self.skills.versions(candidate_name)
+        candidate = next((item for item in reversed(versions)
+                          if item.status in {SkillStatus.CANDIDATE, SkillStatus.TESTED,
+                                             SkillStatus.VERIFIED, SkillStatus.TRUSTED}), None)
+        if candidate is None:
+            candidate = ExecutionEvaluator().candidate(experience, candidate_name, candidate_description)
+            if candidate is None or len(self.skills.candidates()) >= self.config.max_candidate_skills:
+                return None
+            self.skills.register(candidate)
+
+        evidence = self.experiences.for_task_type(experience.task_type)
+        evaluator = ExecutionEvaluator()
+        metrics = evaluator.metrics(evidence)
+        candidate = self.skills.update_evaluation(candidate.skill_id, metrics)
+        if len(evidence) < self.config.minimum_evaluation_runs:
+            return candidate
+
+        reliable = (metrics.get("success_rate", 0.0) >= self.config.minimum_skill_success_rate
+                    and metrics.get("verification_rate", 0.0) >= self.config.minimum_skill_success_rate)
+        if candidate.status is SkillStatus.CANDIDATE:
+            self.skills.set_status(candidate.skill_id,
+                SkillStatus.TESTED if reliable else SkillStatus.REJECTED,
+                actor="learning_loop", reason="evaluated repeated runtime outcomes")
+        elif candidate.status in {SkillStatus.VERIFIED, SkillStatus.TRUSTED} and not reliable:
+            self.skills.set_status(candidate.skill_id, SkillStatus.DEPRECATED,
+                actor="learning_loop", reason="runtime outcome regression")
+        return self.skills.get(candidate.skill_id)
 
 
 def _risk_value(value: str) -> int:

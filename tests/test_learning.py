@@ -1,4 +1,3 @@
-from pathlib import Path
 import pytest
 
 from app.learning import (Experience, ExperienceMemory, ExperienceSource, Skill, SkillEvaluator,
@@ -81,6 +80,45 @@ def test_learning_coordinator_records_first_execution_and_reuses_advisory_workfl
     assert second.experiences[0].experience_id == first.experience_id
     assert second.skills[0].skill_id == candidate.skill_id
     assert second.graph.tasks
+    memory.close(); registry.close()
+
+
+def test_continuous_learning_reuses_candidate_and_evaluates_repeated_outcomes(tmp_path):
+    from app.learning import LearningCoordinator
+    memory = ExperienceMemory(tmp_path / "experience.db")
+    registry = SkillRegistry(tmp_path / "skills.db")
+    coordinator = LearningCoordinator(memory, registry)
+    plan = {"workflow": [{"objective": "write", "tool": "filesystem.write"}],
+            "declared_permissions": ["filesystem.write"], "expected_outcomes": ["file exists"]}
+
+    first = coordinator.record(Experience("write report one", "report", {}, plan, True, True, "done",
+        capabilities_used=("filesystem.write",)), candidate_name="write report", candidate_description="write report")
+    second = coordinator.record(Experience("write report two", "report", {}, plan, True, True, "done",
+        capabilities_used=("filesystem.write",)), candidate_name="write report", candidate_description="write report")
+
+    assert first and second and first.skill_id == second.skill_id
+    assert len(registry.versions("write report")) == 1
+    assert second.status is SkillStatus.TESTED
+    assert second.evaluation["success_rate"] == 1.0
+    assert [item["event"] for item in registry.audit_trail(second.skill_id)] == [
+        "created", "evaluated", "evaluated", "tested"]
+    memory.close(); registry.close()
+
+
+def test_continuous_learning_never_auto_activates_and_deprecates_regression(tmp_path):
+    from app.learning import LearningCoordinator
+    memory = ExperienceMemory(tmp_path / "experience.db")
+    registry = SkillRegistry(tmp_path / "skills.db")
+    coordinator = LearningCoordinator(memory, registry)
+    plan = {"workflow": [{"objective": "write", "tool": "filesystem.write"}],
+            "declared_permissions": ["filesystem.write"]}
+    first = Experience("write report", "report", {}, plan, True, True, "done",
+                       capabilities_used=("filesystem.write",))
+    skill = coordinator.record(first, candidate_name="write report", candidate_description="write report")
+    registry.set_status(skill.skill_id, SkillStatus.VERIFIED, actor="operator", reason="approved")
+    result = coordinator.record(Experience("write report", "report", {}, plan, False, False, "failed",
+        failures=("verification failed",)), candidate_name="write report", candidate_description="write report")
+    assert result.status is SkillStatus.DEPRECATED
     memory.close(); registry.close()
 
 
