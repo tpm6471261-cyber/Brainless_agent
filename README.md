@@ -170,8 +170,11 @@ Run the application once, let the visible Chrome window open, and manually sign 
 ## Run
 
 ```bash
-python run.py
+python run.py       # starts and opens the authenticated Command Center
+python run.py cli   # legacy interactive task CLI
 ```
+
+When no `BRAINLESS_DASHBOARD_TOKEN` is configured, `run.py` generates a cryptographically random per-run token and prints it to the local terminal. The Perception page can accept an explicit owner-labelled desktop rectangle (for example, “Search box” or “Continue button”); the selection becomes non-executable perception evidence and still passes through normal target resolution, policy, permission, execution, observation, and verification boundaries.
 
 ### Desktop UI
 

@@ -35,6 +35,7 @@ class DashboardCommand(str, Enum):
     START_VOICE = "start_voice"
     STOP_VOICE = "stop_voice"
     OBSERVE_ENVIRONMENT = "observe_environment"
+    GUIDE_SCREEN_REGION = "guide_screen_region"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +53,7 @@ class DashboardRuntime:
     approval_system: ApprovalSystem | None = None
     voice: Any = None
     perception: Any = None
+    user_guidance: Any = None
 
 
 class RuntimeCommandGateway:
@@ -72,6 +74,7 @@ class RuntimeCommandGateway:
         except ValueError as error:
             raise ValueError("Unsupported dashboard command") from error
         mission_id = str(payload.get("mission_id", ""))
+        response: dict[str, Any] = {}
         if requested is DashboardCommand.CREATE_MISSION:
             goal = str(payload.get("goal", "")).strip()
             owner = str(payload.get("owner", "user")).strip()
@@ -131,6 +134,16 @@ class RuntimeCommandGateway:
             await self.runtime.perception.observe(PerceptionRequest(
                 frozenset({"screen.read", "window.read", "browser.read", "process.read"}),
                 "Authenticated dashboard observation", mission_id or None))
+        elif requested is DashboardCommand.GUIDE_SCREEN_REGION:
+            if self.runtime.user_guidance is None or self.runtime.perception is None:
+                raise ValueError("Desktop screen guidance is unavailable")
+            element = await self.runtime.user_guidance.select(
+                str(payload.get("label", "")), str(payload.get("role", "")))
+            await self.runtime.perception.observe(PerceptionRequest(
+                frozenset({"screen.read"}), "Owner selected a semantic screen region",
+                mission_id or None))
+            response = {"element_id": element.element_id, "role": element.role,
+                        "label": element.label, "bounds": list(element.bounds or ())}
         correlation_id = str(uuid4())
         event_type = EventType.APPROVAL_RECEIVED if requested in {
             DashboardCommand.APPROVE, DashboardCommand.DENY} else EventType.USER_MESSAGE
@@ -139,7 +152,8 @@ class RuntimeCommandGateway:
             {"command": requested.value, "status": "accepted", "correlation_id": correlation_id},
             correlation_id=correlation_id,
         ))
-        return {"accepted": True, "command": requested.value, "correlation_id": correlation_id}
+        return {"accepted": True, "command": requested.value,
+                "correlation_id": correlation_id, **response}
 
 
 class DashboardService:

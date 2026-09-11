@@ -14,6 +14,7 @@ from app.perception.fusion import PerceptionFusionEngine
 from app.perception.grounding import ScreenGroundingEngine
 from app.perception.models import PerceptionObservation, UIElement
 from app.perception.sources import ComputerControllerSource, FilesystemPerceptionSource
+from app.perception.user_guidance import ScreenRegion, UserGuidancePerceptionSource
 from tests.test_voice import runtime
 
 
@@ -196,4 +197,33 @@ def test_perception_degrades_when_one_source_fails_without_leaking_error():
         failure = next(event for event in events.replay()
                        if event.type is EventType.PERCEPTION_SOURCE_FAILED)
         assert failure.detail == {"source": "broken", "error": "ConnectionError"}
+    asyncio.run(scenario())
+
+
+def test_owner_selected_region_becomes_semantic_evidence_without_execution(tmp_path):
+    class Selector:
+        def select(self, output_dir, timeout_seconds):
+            assert output_dir == tmp_path / "screenshots" and timeout_seconds == 20
+            return ScreenRegion((40, 80, 300, 45), (1920, 1080),
+                                str(tmp_path / "screenshots" / "marked.png"))
+
+    async def scenario():
+        source = UserGuidancePerceptionSource(tmp_path / "screenshots", Selector())
+        assert source.available is False
+        element = await source.select("Search box", "textbox")
+        assert source.available is True
+        observation = await source.observe()
+        assert element.bounds == (40, 80, 300, 45)
+        assert element.editable and not element.clickable
+        assert element.source == "user_guidance"
+        assert observation.elements == (element,)
+        assert observation.trusted_as_instruction is False
+
+        engine = MultimodalPerceptionEngine((source,), AutonomousEventBus())
+        snapshot = await engine.observe(PerceptionRequest(frozenset({"screen.read"}), "owner hint"))
+        assert snapshot.interactive_elements == (element,)
+        assert engine.snapshot()["elements"][0]["label"] == "Search box"
+
+        with pytest.raises(ValueError, match="Unsupported guidance role"):
+            await source.select("danger", "shell-command")
     asyncio.run(scenario())

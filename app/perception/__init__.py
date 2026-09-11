@@ -8,9 +8,10 @@ from app.perception.models import (
 from app.perception.sources import BrowserDOMSource, ComputerControllerSource, FilesystemPerceptionSource, PerceptionSource
 from app.perception.context import CommandSource, ContextBuilder, MultimodalCommand
 from app.perception.providers import SpeechOutputProvider, SpeechRecognitionProvider, VisualUnderstandingProvider
+from app.perception.user_guidance import DesktopRegionSelector, ScreenRegion, UserGuidancePerceptionSource
 
 __all__ = ["BrowserDOMSource", "CommandSource", "ComputerControllerSource", "ContextBuilder", "EnvironmentChange", "EnvironmentSnapshot",
            "MultimodalPerceptionEngine", "PerceptionFusionEngine", "PerceptionObservation",
            "PerceptionRequest", "PerceptionSource", "ScreenGroundingEngine", "TargetQuery",
            "FilesystemPerceptionSource", "MultimodalCommand", "SpeechOutputProvider", "SpeechRecognitionProvider", "UIElement",
-           "VisualUnderstandingProvider"]
+           "VisualUnderstandingProvider", "DesktopRegionSelector", "ScreenRegion", "UserGuidancePerceptionSource"]

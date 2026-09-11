@@ -86,7 +86,7 @@ class DashboardServer:
                         result = asyncio.run(operation)
                     return self._json(HTTPStatus.ACCEPTED,result)
                 except DashboardAuthorizationError: return self._json(HTTPStatus.UNAUTHORIZED,{"error":"unauthorized"})
-                except (KeyError,ValueError,TypeError,json.JSONDecodeError) as error: return self._json(HTTPStatus.BAD_REQUEST,{"error":str(error)})
+                except (KeyError,ValueError,TypeError,TimeoutError,json.JSONDecodeError) as error: return self._json(HTTPStatus.BAD_REQUEST,{"error":str(error)})
                 except FutureTimeoutError:
                     if future: future.cancel()
                     return self._json(HTTPStatus.GATEWAY_TIMEOUT,{"error":"runtime_command_timeout"})

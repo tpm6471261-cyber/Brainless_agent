@@ -69,6 +69,7 @@ class MultimodalPerceptionEngine:
             source
             for source in self.sources
             if source.capabilities & request.capabilities
+            and getattr(source, "available", True)
         )
         if not selected:
             raise PermissionError(

@@ -56,7 +56,7 @@ source .env
 set +a
 ```
 
-Dashboard token kam se kam 16 characters ka rakhein:
+Dashboard token optional hai. Agar set nahi kiya gaya to runtime cryptographically secure token automatically generate karke terminal mein print karega. Stable deployment token chahiye to kam se kam 16 characters ka token set karein:
 
 ```bash
 export BRAINLESS_DASHBOARD_TOKEN="replace-with-a-long-random-local-token"
@@ -122,7 +122,7 @@ Google login fix karne ke liye extension **na zaroori hai, na safe solution**. E
 ### CLI
 
 ```bash
-python run.py
+python run.py cli
 ```
 
 Task enter karein. Login/security page aaye to browser mein manually complete karke terminal mein Enter press karein.
@@ -138,16 +138,26 @@ GUI se task, providers, pause/resume, emergency stop, login continuation, aur lo
 ### Web Command Center
 
 ```bash
-BRAINLESS_DASHBOARD_TOKEN="$BRAINLESS_DASHBOARD_TOKEN" python run_dashboard.py
+python run.py
 ```
 
 Windows PowerShell:
 
 ```powershell
-python run_dashboard.py
+python run.py
 ```
 
-Browser mein `http://127.0.0.1:8765` kholkar wahi dashboard token enter karein. Dashboard ko internet par directly expose na karein; remote use ke liye authenticated TLS reverse proxy lagayein.
+`run.py` ab Command Center start karta hai, secure token terminal mein print karta hai, aur default browser mein `http://127.0.0.1:8765` open karta hai. Printed token login dialog mein enter karein. Auto-open disable karna ho to `BRAINLESS_DASHBOARD_AUTO_OPEN=false` set karein. Legacy interactive task CLI ke liye `python run.py cli` use karein. Dashboard ko internet par directly expose na karein; remote use ke liye authenticated TLS reverse proxy lagayein.
+
+### Agent ko screen area samjhana
+
+1. Dashboard mein **Perception** page kholein.
+2. **Guide agent on screen** select karein.
+3. Area ka semantic naam (jaise `Search box`) aur type (`Text box`, `Button`, etc.) dein.
+4. Desktop overlay aane par required control ke around mouse se rectangle drag karein. Cancel ke liye `Esc` press karein.
+5. Runtime marked screenshot aur global bounds ko `user_guidance` perception source ke roop mein record karega.
+
+Yeh hint khud click/type nahi karta. Agent ka proposed action ab bhi target resolution, governor, policy, permission, tool execution, re-observation, aur verification se guzarta hai. Selection 20 seconds mein cancel ho jati hai aur local graphical desktop session required hai.
 
 ## 6. Voice setup aur push-to-talk
 
@@ -164,9 +174,9 @@ Recommended cost-safe default `push_to_talk` hai. Partial transcript sirf UI upd
 1. Official Chrome installed aur `app/config/providers.yaml` mein `channel: chrome` confirm karein.
 2. Dedicated profile se Google/ChatGPT/Gemini/Claude login bootstrap karein.
 3. Chrome completely close karke profile lock release karein.
-4. Dashboard token export karein.
+4. Stable deployment chahiye to dashboard token export karein; local run mein generated token use kar sakte hain.
 5. Optional voice key configure karein.
-6. `python run_dashboard.py` start karein.
+6. `python run.py` start karein aur terminal mein printed token se connect karein.
 7. Dashboard Health, Voice, Perception, Agents, Missions, Tasks, Approvals, aur Events pages check karein.
 8. Pehle harmless task run karein, jaise `Open Chrome and report the current page title`.
 9. Approval-required ya destructive command ko production data par test na karein; isolated test environment use karein.
