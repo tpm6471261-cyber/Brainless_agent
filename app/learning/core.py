@@ -120,6 +120,20 @@ class ExperienceMemory:
             if score: scored.append((score + (2 if experience.success and experience.verified else -2) + self.feedback_score(experience.experience_id), experience))
         return [item for _, item in sorted(scored, key=lambda pair: pair[0], reverse=True)[:limit]]
 
+    def for_task_type(self, task_type: str, *, limit: int = 50) -> list[Experience]:
+        """Return recent runtime evidence for continuous skill evaluation."""
+        rows = self.db.execute(
+            "SELECT payload_json FROM experiences WHERE task_type=? ORDER BY created_at DESC LIMIT ?",
+            (task_type, max(1, min(limit, 500))),
+        ).fetchall()
+        experiences: list[Experience] = []
+        for row in rows:
+            try:
+                experiences.append(_experience(json.loads(row["payload_json"])))
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return experiences
+
     def add_feedback(self, experience_id: str, kind: str, *, actor: str, detail: str = "") -> None:
         if kind not in {"approve", "reject", "correct", "prefer_strategy", "mark_result_wrong"}:
             raise ValueError("Unknown feedback kind")

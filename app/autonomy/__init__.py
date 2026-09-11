@@ -1,4 +1,4 @@
-"""Runtime-owned autonomous computer-agent components."""
+"""Runtime-owned autonomous computer-agent components.
 
 from app.autonomy.orchestrator import AutonomousRuntime
 from app.autonomy.task_engine import AutonomousTaskEngine
