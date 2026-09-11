@@ -154,7 +154,7 @@ class AgentRuntime:
             return await self._act(f"extract {provider_name} response",
                 lambda: self.recovery.run(provider.extract_response,
                                           lambda: self._recover_response(provider_name, provider)), task_started)
-        except Exception as dom_error:
+        except Exception:
             try:
                 return await self._act(f"extract {provider_name} response from clipboard",
                     lambda: self.fallback_extractor.extract_from_clipboard(provider), task_started)

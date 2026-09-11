@@ -5,7 +5,7 @@ import inspect
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any, Callable
 
 
 @dataclass(frozen=True, slots=True)

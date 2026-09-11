@@ -1,7 +1,7 @@
 """Deterministic final authority gate for mission-scoped autonomous actions."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from threading import RLock
 
