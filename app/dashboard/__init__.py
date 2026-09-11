@@ -3,6 +3,6 @@ from app.dashboard.service import (DashboardAuthorizationError, DashboardCommand
                                    DashboardService, RuntimeCommandGateway)
 from app.dashboard.server import DashboardServer
 __all__ = ["DashboardAuthorizationError", "DashboardCommand", "DashboardRuntime", "DashboardService",
-           "RuntimeCommandGateway", "DashboardServer"]
+           "RuntimeCommandGateway", "DashboardServer", "RuntimeEventBridge"]
 
 from app.dashboard.runtime_bridge import RuntimeEventBridge
