@@ -6,7 +6,9 @@ class ClaudeProvider(ChatbotProvider):
 
     def __init__(self, browser, url: str) -> None:
         super().__init__(browser, url, ProviderSelectors(
-            input=("div[contenteditable='true'][role='textbox']", "textarea[placeholder*='Message']"),
+            input=("[data-testid='chat-input']", "div.ProseMirror[contenteditable='true']",
+                   "div[contenteditable='true'][role='textbox']", "textarea[placeholder*='message' i]",
+                   "[aria-label*='prompt' i][contenteditable='true']"),
             response=("[data-is-streaming='false']", "div.font-claude-response"),
             stop=("button[aria-label*='Stop']",),
             copy=("button[aria-label*='Copy']",),

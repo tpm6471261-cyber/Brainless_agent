@@ -61,6 +61,10 @@ class ContextBuilder:
                                 "elements": [{"role": item.role, "label": item.label,
                                               "text": item.text[:300], "source": item.source,
                                               "confidence": item.confidence} for item in elements],
+                                "windows": [{"window_id": item.window_id, "title": item.title[:200],
+                                             "state": item.state.value, "bounds": item.bounds,
+                                             "active": item.active, "visible": item.visible}
+                                            for item in environment.windows[:self.element_limit]],
                                 "trust": "untrusted_observation_data"},
                 "world": world, "agents": agents[:self.history_limit],
                 "recent_events": recent_events[-self.history_limit:]}

@@ -18,6 +18,7 @@ class PerceptionFusionEngine:
                          if getattr(item, field)), None)
         elements = {item.element_id: item for observation in ordered for item in observation.elements
                     if item.visible}
+        windows = {item.window_id: item for observation in ordered for item in observation.windows}
         filesystem = tuple(change for item in ordered for change in item.filesystem_changes)
         processes = tuple(change for item in ordered for change in item.process_changes)
         browser: dict = {}
@@ -39,4 +40,5 @@ class PerceptionFusionEngine:
             tuple({"source": item.source, "kind": item.source_kind,
                    "timestamp": item.timestamp.isoformat(), "confidence": item.confidence,
                    **item.metadata} for item in ordered),
+            tuple(windows.values()),
         )

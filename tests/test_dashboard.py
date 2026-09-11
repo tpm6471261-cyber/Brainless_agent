@@ -156,3 +156,45 @@ def test_dashboard_correlates_agents_actions_and_events_to_authoritative_mission
     assert snapshot["agents"][0]["mission_id"] == mission.mission_id
     assert snapshot["actions"][0]["mission_id"] == mission.mission_id
     assert snapshot["events"][0]["mission_id"] == mission.mission_id
+
+
+def test_dashboard_screen_guidance_is_authenticated_and_flows_to_perception(tmp_path):
+    from app.perception.models import UIElement
+
+    class Guidance:
+        async def select(self, label, role):
+            return UIElement(role, label, bounds=(10, 20, 100, 30), source="user_guidance",
+                             confidence=1, editable=role == "textbox")
+
+    class Perception:
+        def __init__(self): self.requests = []
+        async def observe(self, request): self.requests.append(request)
+
+    async def scenario():
+        base, _, _ = dashboard(tmp_path)
+        perception = Perception()
+        runtime = DashboardRuntime(base.missions, base.events, base.operator, base.agents,
+                                   base.actions, perception=perception, user_guidance=Guidance())
+        gateway = RuntimeCommandGateway(runtime, TOKEN)
+        with pytest.raises(PermissionError):
+            await gateway.execute("wrong-token-value", "guide_screen_region",
+                                  {"label": "Search", "role": "textbox"})
+        result = await gateway.execute(TOKEN, "guide_screen_region",
+                                       {"label": "Search", "role": "textbox"})
+        assert result["accepted"] and result["bounds"] == [10, 20, 100, 30]
+        assert perception.requests[0].capabilities == frozenset({"screen.read"})
+
+    asyncio.run(scenario())
+
+
+def test_dashboard_assets_expose_quick_start_guidance_and_window_states():
+    from pathlib import Path
+    static = Path("app/dashboard/static")
+    markup = (static / "index.html").read_text(encoding="utf-8")
+    script = (static / "app.js").read_text(encoding="utf-8")
+    assert "guidanceDialog" in markup
+    assert "QUICK START" in script
+    assert "Guide agent on screen" in script
+    assert "Desktop windows" in script
+    assert "CAPABILITY DISCOVERY" in script
+    assert "state === 'minimized'" in script and "state === 'maximized'" in script

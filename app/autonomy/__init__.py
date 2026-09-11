@@ -35,3 +35,4 @@ from app.autonomy.event_store import EventStore
 from app.autonomy.production_mission import RuntimeMissionComposer, VerifiedMissionCriterion
 from app.autonomy.approvals import ApprovalRequest, ApprovalStatus, ApprovalStore, ApprovalSystem
 from app.autonomy.governor import AutonomyGovernor, GovernorDecision, GovernorOutcome, MissionContract
+from app.autonomy.capability_broker import CapabilityAssessment, CapabilityBroker, CapabilityStatus

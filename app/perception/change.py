@@ -22,6 +22,22 @@ class VisualChangeDetector:
         for key in old.keys() - new.keys():
             changes.append(EnvironmentChange("ui_disappeared", {"element_id": key,
                                                                  "role": old[key].role}))
+        old_windows = {item.window_id: item for item in before.windows}
+        new_windows = {item.window_id: item for item in after.windows}
+        for key in new_windows.keys() - old_windows.keys():
+            changes.append(EnvironmentChange("window_opened", {"window_id": key,
+                                                                 "state": new_windows[key].state.value}))
+        for key in old_windows.keys() - new_windows.keys():
+            changes.append(EnvironmentChange("window_closed", {"window_id": key}))
+        for key in old_windows.keys() & new_windows.keys():
+            previous, current = old_windows[key], new_windows[key]
+            if previous.state != current.state:
+                changes.append(EnvironmentChange("window_state_changed", {
+                    "window_id": key, "before": previous.state.value,
+                    "after": current.state.value}))
+            if previous.active != current.active:
+                changes.append(EnvironmentChange("window_focus_changed", {
+                    "window_id": key, "active": current.active}))
         return tuple(changes)
 
 

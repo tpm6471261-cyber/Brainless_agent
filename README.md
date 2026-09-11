@@ -150,6 +150,8 @@ Event details are redacted before entering either the in-memory history or SQLit
 
 ## Installation
 
+For a complete Hinglish setup guide—including virtual environments, dashboard/voice configuration, persistent Google Chrome login, automation checklist, and troubleshooting—see [`run_project.md`](run_project.md).
+
 Requires Python 3.11+ and an installed Google Chrome/Chrome-compatible browser.
 
 ```bash
@@ -168,8 +170,17 @@ Run the application once, let the visible Chrome window open, and manually sign 
 ## Run
 
 ```bash
-python run.py
+python run.py       # starts and opens the authenticated Command Center
+python run.py cli   # legacy interactive task CLI
 ```
+
+When no `BRAINLESS_DASHBOARD_TOKEN` is configured, `run.py` generates a cryptographically random per-run token and prints it to the local terminal. The Perception page can accept an explicit owner-labelled desktop rectangle (for example, “Search box” or “Continue button”); the selection becomes non-executable perception evidence and still passes through normal target resolution, policy, permission, execution, observation, and verification boundaries.
+
+The Perception page also shows real desktop-window inventory with active, normal, minimized, maximized, and fullscreen states when native enumeration is available. Window-state collection currently uses PyGetWindow's supported Windows backend; other platforms remain explicitly unavailable rather than reporting guessed state.
+
+### Capability-first personal agent
+
+Before accepting a specialized objective, the runtime capability broker checks its registered tools and reusable agents. For example, a video-editing request requires a real `video.edit` capability; generic mouse/process access is not misrepresented as a video editor. If no compatible local agent or tool exists, the requested mission is safely paused and a separate browser-research mission is created to compare free/open-source local options. Discovery is constrained to research: it cannot install software, create an account, purchase a service, upload private media, or execute an external agent. A discovered option becomes usable only after a real adapter is registered and the normal permission, governor, approval, and verification checks pass.
 
 ### Desktop UI
 

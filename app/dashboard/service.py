@@ -35,6 +35,7 @@ class DashboardCommand(str, Enum):
     START_VOICE = "start_voice"
     STOP_VOICE = "stop_voice"
     OBSERVE_ENVIRONMENT = "observe_environment"
+    GUIDE_SCREEN_REGION = "guide_screen_region"
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +53,8 @@ class DashboardRuntime:
     approval_system: ApprovalSystem | None = None
     voice: Any = None
     perception: Any = None
+    user_guidance: Any = None
+    capability_broker: Any = None
 
 
 class RuntimeCommandGateway:
@@ -72,6 +75,7 @@ class RuntimeCommandGateway:
         except ValueError as error:
             raise ValueError("Unsupported dashboard command") from error
         mission_id = str(payload.get("mission_id", ""))
+        response: dict[str, Any] = {}
         if requested is DashboardCommand.CREATE_MISSION:
             goal = str(payload.get("goal", "")).strip()
             owner = str(payload.get("owner", "user")).strip()
@@ -81,6 +85,26 @@ class RuntimeCommandGateway:
             if not -100 <= priority <= 100:
                 raise ValueError("Mission priority must be between -100 and 100")
             mission = Mission(goal, owner, priority=priority)
+            assessment = (self.runtime.capability_broker.assess(goal)
+                          if self.runtime.capability_broker else None)
+            await self.runtime.operator.create(mission)
+            if assessment and assessment.status.value == "discovery_required":
+                mission.status = MissionStatus.PAUSED
+                mission.current_state["capability_assessment"] = assessment.snapshot()
+                mission.checkpoint["blocked_reason"] = "Required capability is not locally available"
+                mission.touch()
+                self.runtime.missions.save(mission)
+                discovery = self.runtime.capability_broker.discovery_mission(mission, assessment)
+                await self.runtime.operator.create(discovery)
+                await self.runtime.events.publish(AutonomousEvent(
+                    EventType.CAPABILITY_GAP, mission.mission_id,
+                    {"domain": assessment.domain, "missing_tools": list(assessment.missing_tools),
+                     "status": "paused", "discovery_mission_id": discovery.mission_id}))
+                await self.runtime.events.publish(AutonomousEvent(
+                    EventType.CAPABILITY_DISCOVERY_STARTED, discovery.mission_id,
+                    {"original_mission_id": mission.mission_id, "cost_constraint": "free"}))
+                response = {"capability_status": assessment.status.value,
+                            "discovery_mission_id": discovery.mission_id}
             await self.runtime.operator.create(mission)
             mission_id = mission.mission_id
         elif requested in {DashboardCommand.PAUSE_MISSION, DashboardCommand.RESUME_MISSION,
@@ -131,6 +155,16 @@ class RuntimeCommandGateway:
             await self.runtime.perception.observe(PerceptionRequest(
                 frozenset({"screen.read", "window.read", "browser.read", "process.read"}),
                 "Authenticated dashboard observation", mission_id or None))
+        elif requested is DashboardCommand.GUIDE_SCREEN_REGION:
+            if self.runtime.user_guidance is None or self.runtime.perception is None:
+                raise ValueError("Desktop screen guidance is unavailable")
+            element = await self.runtime.user_guidance.select(
+                str(payload.get("label", "")), str(payload.get("role", "")))
+            await self.runtime.perception.observe(PerceptionRequest(
+                frozenset({"screen.read"}), "Owner selected a semantic screen region",
+                mission_id or None))
+            response = {"element_id": element.element_id, "role": element.role,
+                        "label": element.label, "bounds": list(element.bounds or ())}
         correlation_id = str(uuid4())
         event_type = EventType.APPROVAL_RECEIVED if requested in {
             DashboardCommand.APPROVE, DashboardCommand.DENY} else EventType.USER_MESSAGE
@@ -139,6 +173,8 @@ class RuntimeCommandGateway:
             {"command": requested.value, "status": "accepted", "correlation_id": correlation_id},
             correlation_id=correlation_id,
         ))
+        return {"accepted": True, "command": requested.value,
+                "correlation_id": correlation_id, **response}
         return {"accepted": True, "command": requested.value, "correlation_id": correlation_id}
 
 
@@ -157,6 +193,14 @@ class DashboardService:
         events = self.events(task_missions=task_missions)
         statuses = [mission["status"] for mission in missions]
         pending_approvals = self._approvals()
+        capability_gaps = []
+        for mission in missions:
+            state = mission["current_state"]
+            assessment = state.get("capability_assessment")
+            if (isinstance(assessment, dict)
+                    and "capability_discovery_for" not in state
+                    and assessment.get("status") == "discovery_required"):
+                capability_gaps.append({"mission_id": mission["mission_id"], **assessment})
         return {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "takeover_mode": self.runtime.operator.takeover.mode.value,
@@ -169,6 +213,7 @@ class DashboardService:
                 "failed_tasks": sum(task["status"] == "failed" for task in tasks),
                 "waiting_blocked": sum(status in {"waiting", "blocked", "awaiting_user"} for status in statuses),
                 "pending_approvals": len(pending_approvals),
+                "capability_gaps": len(capability_gaps),
             },
             "health": self.health(), "missions": missions, "tasks": tasks, "agents": agents,
             "schedules": schedules, "events": events, "actions": actions,
@@ -191,6 +236,8 @@ class DashboardService:
                 "current_transcript": "", "final_transcript": "", "error": None},
             "perception": self._perception() if self.runtime.perception else {
                 "status": "not_configured", "observations": 0, "average_latency_ms": None,
+                "elements": [], "windows": [], "sources": [], "screenshot_available": False},
+            "capability_gaps": capability_gaps,
                 "elements": [], "sources": [], "screenshot_available": False},
         }
 

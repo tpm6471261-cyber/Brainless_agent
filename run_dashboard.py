@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
+import webbrowser
 from pathlib import Path
 
 from app.autonomy.event_store import EventStore
@@ -22,6 +24,23 @@ from app.dashboard.runtime_bridge import RuntimeEventBridge
 from app.safety.permissions import Permission
 from app.autonomy.operator import AutonomyMode
 from app.autonomy.health import AgentHealthMonitor
+from app.autonomy.capability_broker import CapabilityBroker
+from app.voice import AssemblyAISpeechProvider, VoiceConfig, VoiceControlPlane, VoiceMode, VoiceService
+from app.voice.service import VoiceRuntimeRouter
+from app.voice.store import VoiceMetadataStore
+from app.perception import (ComputerControllerSource, DesktopWindowPerceptionSource, FilesystemPerceptionSource,
+                            MultimodalPerceptionEngine, UserGuidancePerceptionSource)
+
+
+def dashboard_token(environment: dict[str, str] | None = None) -> tuple[str, bool]:
+    """Return a configured token or a cryptographically random per-run token."""
+    environment = os.environ if environment is None else environment
+    configured = environment.get("BRAINLESS_DASHBOARD_TOKEN", "")
+    if configured:
+        if len(configured) < 16:
+            raise ValueError("BRAINLESS_DASHBOARD_TOKEN must contain at least 16 characters")
+        return configured, False
+    return secrets.token_urlsafe(24), True
 from app.voice import AssemblyAISpeechProvider, VoiceConfig, VoiceControlPlane, VoiceMode, VoiceService
 from app.voice.service import VoiceRuntimeRouter
 from app.voice.store import VoiceMetadataStore
@@ -42,6 +61,10 @@ async def _tick_triggers(triggers: TriggerEngine) -> None:
 
 
 async def serve() -> None:
+    try:
+        token, generated = dashboard_token()
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
     token = os.environ.get("BRAINLESS_DASHBOARD_TOKEN", "")
     if len(token) < 16:
         raise SystemExit("Set BRAINLESS_DASHBOARD_TOKEN to at least 16 characters")
@@ -78,6 +101,11 @@ async def serve() -> None:
             VoiceMetadataStore(root / "data/voice-sessions.json"))
 
     voice = VoiceControlPlane(create_voice)
+    user_guidance = UserGuidancePerceptionSource(root / "screenshots")
+    desktop_windows = DesktopWindowPerceptionSource()
+    multimodal_perception = MultimodalPerceptionEngine((ComputerControllerSource(
+        application.autonomous_actions.controller), desktop_windows,
+        FilesystemPerceptionSource(root), user_guidance), events,
     multimodal_perception = MultimodalPerceptionEngine((ComputerControllerSource(
         application.autonomous_actions.controller), FilesystemPerceptionSource(root)), events,
         world=application.autonomous_actions.world_state,
@@ -92,6 +120,10 @@ async def serve() -> None:
         application.autonomous_actions, triggers=trigger_store, memory=application.memory,
         skills=application.skill_registry, provider_names=application.providers.names,
         mission_execution_status=execution_status, approval_system=approvals, voice=voice,
+        perception=multimodal_perception, user_guidance=user_guidance,
+        capability_broker=CapabilityBroker(application.agent_manager,
+                                           application.autonomous.registry,
+                                           application.autonomous.analyzer))
         perception=multimodal_perception)
     gateway = RuntimeCommandGateway(runtime, token)
     server = DashboardServer(DashboardService(runtime), gateway, port=8765,
@@ -102,6 +134,13 @@ async def serve() -> None:
     operator_task = asyncio.create_task(operator.run_background(stop=lambda: False))
     trigger_task = asyncio.create_task(_tick_triggers(trigger_engine))
     server.start()
+    url = "http://127.0.0.1:8765"
+    print(f"Command Center: {url}")
+    print(f"Dashboard access token: {token}")
+    if generated:
+        print("A secure per-run token was generated because BRAINLESS_DASHBOARD_TOKEN was not set.")
+    if os.environ.get("BRAINLESS_DASHBOARD_AUTO_OPEN", "true").casefold() not in {"0", "false", "no"}:
+        webbrowser.open(url, new=2)
     print("Command Center: http://127.0.0.1:8765")
     try:
         await asyncio.Event().wait()

@@ -17,6 +17,9 @@ class FakeResponseLocator:
     async def is_visible(self) -> bool:
         return self.index is not None and bool(self.responses[self.index])
 
+    async def is_enabled(self) -> bool:
+        return True
+
     async def inner_text(self) -> str:
         assert self.index is not None
         return self.responses[self.index]
