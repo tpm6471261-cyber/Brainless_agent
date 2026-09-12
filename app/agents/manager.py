@@ -74,6 +74,22 @@ class AgentManager:
     def list_agents(self) -> tuple[Agent, ...]:
         return tuple(self._agents.values())
 
+    def available_tools(self, agent_id: str) -> tuple[dict[str, object], ...]:
+        """Return only tools currently granted and permitted for an agent."""
+        agent = self.get_agent(agent_id)
+        return tuple({"tool_id": tool.tool_id, "description": tool.description,
+                      "permissions": sorted(tool.required_permissions), "risk": tool.risk.value}
+                     for tool_id in sorted(agent.available_tools)
+                     for tool in (self.tools.get(tool_id),)
+                     if tool.required_permissions.issubset(agent.permissions))
+
+    def set_event_subscriptions(self, parent_agent_id: str, agent_id: str,
+                                subscriptions: set[str]) -> None:
+        child = self._owned_child(parent_agent_id, agent_id)
+        child.event_subscriptions = set(subscriptions)
+        self._event(child, EventType.STATUS, "Event subscriptions updated",
+                    {"subscriptions": ",".join(sorted(subscriptions))})
+
     def get_children(self, agent_id: str) -> tuple[Agent, ...]:
         return tuple(self.get_agent(child_id) for child_id in self.get_agent(agent_id).child_agents)
 
