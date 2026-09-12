@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.agents.models import AgentStatus
+from app.agents.building_blocks import AgentDefinition
 from app.autonomy.events import AutonomousEvent, AutonomousEventBus, EventType
 from app.autonomy.mission import Mission, MissionStatus, MissionStore
 from app.autonomy.operator import AutonomousOperator
@@ -23,6 +24,7 @@ class DashboardAuthorizationError(PermissionError):
 
 
 class DashboardCommand(str, Enum):
+    CREATE_AGENT = "create_agent"
     CREATE_MISSION = "create_mission"
     PAUSE_MISSION = "pause_mission"
     RESUME_MISSION = "resume_mission"
@@ -76,7 +78,12 @@ class RuntimeCommandGateway:
             raise ValueError("Unsupported dashboard command") from error
         mission_id = str(payload.get("mission_id", ""))
         response: dict[str, Any] = {}
-        if requested is DashboardCommand.CREATE_MISSION:
+        if requested is DashboardCommand.CREATE_AGENT:
+            parent_agent_id = str(payload.get("parent_agent_id", "")).strip()
+            definition = AgentDefinition.from_mapping(payload.get("agent", {}))
+            child = definition.create(self.runtime.agents, parent_agent_id)
+            response = {"agent_id": child.agent_id, "parent_agent_id": parent_agent_id}
+        elif requested is DashboardCommand.CREATE_MISSION:
             goal = str(payload.get("goal", "")).strip()
             owner = str(payload.get("owner", "user")).strip()
             if not goal or len(goal) > 4_000 or not owner or len(owner) > 200:

@@ -4,6 +4,10 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+from app.agents.building_blocks import AgentDefinition
 
 from app.memory.sqlite_memory import SQLiteMemory
 
@@ -16,7 +20,43 @@ def run_agent_cli(arguments: list[str], database: Path) -> None:
     permissions = commands.add_parser("permissions"); permissions.add_argument("agent_id")
     logs = commands.add_parser("logs"); logs.add_argument("agent_id")
     tree = commands.add_parser("tree"); tree.add_argument("agent_id", nargs="?")
+    create = commands.add_parser("create", help="Create an agent in a running dashboard runtime")
+    create.add_argument("--parent", required=True, help="Parent agent UUID")
+    create.add_argument("--name"); create.add_argument("--role")
+    create.add_argument("--objective"); create.add_argument("--task")
+    create.add_argument("--permission", action="append", default=[])
+    create.add_argument("--tool", action="append", default=[])
+    create.add_argument("--risk-policy", choices=("low", "medium", "high", "critical"), default="medium")
+    create.add_argument("--dashboard", default="http://127.0.0.1:8765")
+    create.add_argument("--token", required=True, help="Dashboard bearer token")
+    create.add_argument("--definition", type=Path, help="JSON definition; named flags provide defaults")
     parsed = parser.parse_args(arguments)
+    if parsed.command == "create":
+        raw = json.loads(parsed.definition.read_text(encoding="utf-8")) if parsed.definition else {
+            "name": parsed.name, "role": parsed.role, "objective": parsed.objective, "task": parsed.task,
+            "permissions": parsed.permission, "tools": parsed.tool, "risk_policy": parsed.risk_policy,
+        }
+        definition = AgentDefinition.from_mapping(raw)
+        payload = {"command": "create_agent", "payload": {
+            "parent_agent_id": parsed.parent,
+            "agent": {"name": definition.name, "role": definition.role,
+                      "objective": definition.objective, "task": definition.task,
+                      "permissions": sorted(definition.permissions), "tools": sorted(definition.tools),
+                      "subscriptions": sorted(definition.subscriptions), "context": dict(definition.context),
+                      "resource_limits": dict(definition.resource_limits),
+                      "allowed_applications": sorted(definition.allowed_applications),
+                      "allowed_directories": sorted(definition.allowed_directories),
+                      "risk_policy": definition.risk_policy}}}
+        request = Request(parsed.dashboard.rstrip("/") + "/api/commands",
+                          data=json.dumps(payload).encode(), method="POST",
+                          headers={"Authorization": f"Bearer {parsed.token}", "Content-Type": "application/json"})
+        try:
+            with urlopen(request, timeout=10) as response:
+                print(json.dumps(json.loads(response.read()), indent=2))
+        except (HTTPError, URLError) as error:
+            detail = error.read().decode() if isinstance(error, HTTPError) else str(error)
+            raise SystemExit(f"Agent creation failed: {detail}") from error
+        return
     storage = SQLiteMemory(database)
     try:
         records = storage.agent_records()

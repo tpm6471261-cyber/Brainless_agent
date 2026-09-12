@@ -55,6 +55,8 @@ USER -> ROOT AGENT -> AGENT MANAGER
 
 Agent events record task, status, result, error, tool, and permission-denied outcomes. Independent children can run concurrently, and a parent can inspect the tree, collect results, retry bounded failures, pause, resume, or terminate direct children. The provider websites remain the reasoning layer; agent orchestration and tool permissions remain in Python.
 
+Agents can also be assembled from validated declarative building blocks in Python, created from the authenticated **Agents** dashboard page, or submitted to a running dashboard with `python run.py agent create`. See [the complete agent-building guide](AGENT_BUILDING.md) for the schema, examples, CLI flags, dashboard workflow, and least-privilege checklist.
+
 The runtime observes after navigation and before sending input. Provider adapters use DOM/accessibility locators instead of fixed screen coordinates. If a login, CAPTCHA, 2FA, or another security challenge is detected, the run stops and tells the user to complete it manually. The project never captures passwords, exports cookies, or attempts to bypass a security mechanism.
 
 
