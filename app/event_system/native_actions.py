@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import webbrowser
 from pathlib import Path
 from app.event_system.actions import ActionRegistry, ActionSpec, RiskLevel
 
@@ -19,9 +20,23 @@ def register_desktop_actions(registry: ActionRegistry) -> None:
     def delete_file(a): path(a["path"]).unlink(); return True
     def delete_folder(a): shutil.rmtree(path(a["path"])); return True
     def start_process(a): return subprocess.Popen([str(x) for x in a["command"]], shell=False).pid
-    def stop_process(a): os.kill(int(a["pid"]), 15); return True
+    def stop_process(a):
+        pid=int(a["pid"])
+        if pid<=4:raise PermissionError("Protected system process termination is forbidden")
+        os.kill(pid,15);return True
+    def open_path(a):
+        target=str(path(a["path"]))
+        if os.name=="nt":os.startfile(target)  # type: ignore[attr-defined]
+        else:subprocess.Popen(["xdg-open",target],shell=False)
+        return target
+    def window(a):
+        import pygetwindow
+        matches=pygetwindow.getWindowsWithTitle(str(a["title"]))
+        if not matches:raise LookupError("Window was not found")
+        return matches[0]
     specs = (
         ActionSpec("MOVE_MOUSE","Move pointer","mouse",frozenset({"mouse.control"}),RiskLevel.LOW,frozenset({"x","y"}),"none",lambda a:pyauto().moveTo(int(a["x"]),int(a["y"]))),
+        ActionSpec("SET_MOUSE_POSITION","Set pointer position","mouse",frozenset({"mouse.control"}),RiskLevel.LOW,frozenset({"x","y"}),"none",lambda a:pyauto().moveTo(int(a["x"]),int(a["y"]))),
         ActionSpec("LEFT_CLICK","Left click","mouse",frozenset({"mouse.control"}),RiskLevel.MEDIUM,frozenset({"x","y"}),"none",lambda a:pyauto().click(int(a["x"]),int(a["y"]))),
         ActionSpec("RIGHT_CLICK","Right click","mouse",frozenset({"mouse.control"}),RiskLevel.MEDIUM,frozenset({"x","y"}),"none",lambda a:pyauto().click(int(a["x"]),int(a["y"]),button="right")),
         ActionSpec("DOUBLE_CLICK","Double click","mouse",frozenset({"mouse.control"}),RiskLevel.MEDIUM,frozenset({"x","y"}),"none",lambda a:pyauto().doubleClick(int(a["x"]),int(a["y"]))),
@@ -31,20 +46,33 @@ def register_desktop_actions(registry: ActionRegistry) -> None:
         ActionSpec("SCROLL","Scroll wheel","mouse",frozenset({"mouse.control"}),RiskLevel.LOW,frozenset({"delta"}),"none",lambda a:pyauto().scroll(int(a["delta"]))),
         ActionSpec("DRAG","Drag pointer","mouse",frozenset({"mouse.control"}),RiskLevel.MEDIUM,frozenset({"x","y","duration","button"}),"none",lambda a:pyauto().dragTo(int(a["x"]),int(a["y"]),float(a["duration"]),button=str(a["button"]))),
         ActionSpec("PRESS_KEY","Press key","keyboard",frozenset({"keyboard.control"}),RiskLevel.MEDIUM,frozenset({"key"}),"none",lambda a:pyauto().press(str(a["key"]))),
+        ActionSpec("KEY_DOWN","Hold key","keyboard",frozenset({"keyboard.control"}),RiskLevel.MEDIUM,frozenset({"key"}),"none",lambda a:pyauto().keyDown(str(a["key"]))),
         ActionSpec("RELEASE_KEY","Release key","keyboard",frozenset({"keyboard.control"}),RiskLevel.LOW,frozenset({"key"}),"none",lambda a:pyauto().keyUp(str(a["key"]))),
         ActionSpec("TYPE_TEXT","Type text","keyboard",frozenset({"keyboard.control"}),RiskLevel.MEDIUM,frozenset({"text"}),"none",lambda a:pyauto().write(str(a["text"]))),
         ActionSpec("HOTKEY","Press key combination","keyboard",frozenset({"keyboard.control"}),RiskLevel.MEDIUM,frozenset({"keys"}),"none",lambda a:pyauto().hotkey(*[str(x) for x in a["keys"]])),
+        ActionSpec("KEY_SEQUENCE","Press a key sequence","keyboard",frozenset({"keyboard.control"}),RiskLevel.MEDIUM,frozenset({"keys","interval"}),"none",lambda a:pyauto().press([str(x) for x in a["keys"]],interval=float(a["interval"]))),
         ActionSpec("READ_CLIPBOARD","Read clipboard","clipboard",frozenset({"clipboard.read"}),RiskLevel.MEDIUM,frozenset(),"text",lambda _:str(clipboard().paste())),
         ActionSpec("WRITE_CLIPBOARD","Write clipboard","clipboard",frozenset({"clipboard.write"}),RiskLevel.MEDIUM,frozenset({"text"}),"none",lambda a:clipboard().copy(str(a["text"]))),
         ActionSpec("CLEAR_CLIPBOARD","Clear clipboard","clipboard",frozenset({"clipboard.write"}),RiskLevel.MEDIUM,frozenset(),"none",lambda _:clipboard().copy("")),
         ActionSpec("CREATE_FILE","Create file","filesystem",frozenset({"filesystem.write"}),RiskLevel.MEDIUM,frozenset({"path","content"}),"path",lambda a:(path(a["path"]).write_text(str(a["content"]),encoding="utf-8"),str(path(a["path"])))[1]),
         ActionSpec("COPY_FILE","Copy file","filesystem",frozenset({"filesystem.write"}),RiskLevel.MEDIUM,frozenset({"source","destination"}),"path",copy_file),
         ActionSpec("MOVE_FILE","Move file","filesystem",frozenset({"filesystem.write"}),RiskLevel.MEDIUM,frozenset({"source","destination"}),"path",move_file),
+        ActionSpec("RENAME_FILE","Rename file","filesystem",frozenset({"filesystem.write"}),RiskLevel.MEDIUM,frozenset({"source","destination"}),"path",move_file),
         ActionSpec("DELETE_FILE","Delete file","filesystem",frozenset({"filesystem.delete"}),RiskLevel.HIGH,frozenset({"path"}),"bool",delete_file),
         ActionSpec("CREATE_FOLDER","Create folder","filesystem",frozenset({"filesystem.write"}),RiskLevel.MEDIUM,frozenset({"path"}),"path",lambda a:(path(a["path"]).mkdir(parents=True,exist_ok=True),str(path(a["path"])))[1]),
         ActionSpec("DELETE_FOLDER","Delete folder","filesystem",frozenset({"filesystem.delete"}),RiskLevel.HIGH,frozenset({"path"}),"bool",delete_folder),
+        ActionSpec("OPEN_FILE","Open a file with its registered application","filesystem",frozenset({"filesystem.read"}),RiskLevel.MEDIUM,frozenset({"path"}),"path",open_path),
         ActionSpec("START_PROCESS","Start process","process",frozenset({"process.control"}),RiskLevel.MEDIUM,frozenset({"command"}),"pid",start_process),
         ActionSpec("STOP_PROCESS","Terminate process","process",frozenset({"process.control"}),RiskLevel.HIGH,frozenset({"pid"}),"bool",stop_process),
         ActionSpec("TAKE_SCREENSHOT","Capture screen","screen",frozenset({"screen.capture"}),RiskLevel.MEDIUM,frozenset({"path"}),"path",lambda a:(pyauto().screenshot(str(path(a["path"]))),str(path(a["path"])))[1]),
+        ActionSpec("CAPTURE_REGION","Capture a screen region","screen",frozenset({"screen.capture"}),RiskLevel.MEDIUM,frozenset({"path","x","y","width","height"}),"path",lambda a:(pyauto().screenshot(str(path(a["path"])),region=(int(a["x"]),int(a["y"]),int(a["width"]),int(a["height"]))),str(path(a["path"])))[1]),
+        ActionSpec("MINIMIZE_WINDOW","Minimize a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title"}),"none",lambda a:window(a).minimize()),
+        ActionSpec("MAXIMIZE_WINDOW","Maximize a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title"}),"none",lambda a:window(a).maximize()),
+        ActionSpec("RESTORE_WINDOW","Restore a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title"}),"none",lambda a:window(a).restore()),
+        ActionSpec("CLOSE_WINDOW","Close a window","window",frozenset({"window.control"}),RiskLevel.HIGH,frozenset({"title"}),"none",lambda a:window(a).close()),
+        ActionSpec("MOVE_WINDOW","Move a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title","x","y"}),"none",lambda a:window(a).moveTo(int(a["x"]),int(a["y"]))),
+        ActionSpec("RESIZE_WINDOW","Resize a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title","width","height"}),"none",lambda a:window(a).resizeTo(int(a["width"]),int(a["height"]))),
+        ActionSpec("FOCUS_WINDOW","Focus a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title"}),"none",lambda a:window(a).activate()),
+        ActionSpec("OPEN_URL","Open URL in default browser","browser",frozenset({"browser.control"}),RiskLevel.MEDIUM,frozenset({"url"}),"bool",lambda a:webbrowser.open(str(a["url"]))),
     )
     for spec in specs: registry.register(spec)

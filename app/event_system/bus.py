@@ -44,6 +44,15 @@ class EventBus:
                 result=handler(event)
                 if hasattr(result,"__await__"): await result
                 self._last_delivery[(key,event.event_type)]=now
+    async def replay(self, *, event_type: str | None=None, since=None) -> int:
+        """Route retained events without duplicating them in history."""
+        events=self.history.replay(event_type=event_type,since=since)
+        for event in events:
+            self._sequence+=1;await self._queue.put((-event.priority,self._sequence,event))
+        await self.route_pending();return len(events)
+
+    def pause(self) -> None:self.paused=True
+    async def resume(self) -> None:self.paused=False;await self.route_pending()
 
 class EventRouter:
     def __init__(self,bus: EventBus) -> None: self.bus=bus
@@ -54,9 +63,20 @@ class EventDetector:
     async def poll(self) -> tuple[Event,...]: raise NotImplementedError
 
 class EventManager:
-    def __init__(self,bus: EventBus,detectors=()) -> None: self.bus,self.detectors=bus,list(detectors); self.running=False
+    def __init__(self,bus: EventBus,detectors=()) -> None:
+        self.bus,self.detectors=bus,list(detectors); self.running=False;self.unavailable={}
     async def poll_once(self) -> tuple[Event,...]:
         emitted=[]
         for detector in self.detectors:
-            for event in await detector.poll(): await self.bus.publish(event); emitted.append(event)
+            try:events=await detector.poll()
+            except (ImportError,OSError,RuntimeError) as error:
+                self.unavailable[getattr(detector,"name",type(detector).__name__)]=str(error);continue
+            for event in events: await self.bus.publish(event); emitted.append(event)
         return tuple(emitted)
+    async def run(self, interval: float=.5) -> None:
+        self.running=True
+        try:
+            while self.running:
+                await self.poll_once();await asyncio.sleep(max(.01,interval))
+        finally:self.running=False
+    def stop(self) -> None:self.running=False
