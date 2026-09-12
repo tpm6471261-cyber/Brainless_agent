@@ -40,11 +40,16 @@ class ActionRegistry:
             return ActionResult(ActionStatus.DENIED,"User confirmation was not granted")
         for attempt in range(spec.retries+1):
             try:
-                value=spec.executor(arguments)
-                if inspect.isawaitable(value):
-                    task=asyncio.create_task(value);self._pending.add(task)
-                    try:value=await asyncio.wait_for(task,timeout=spec.timeout)
-                    finally:self._pending.discard(task)
+                if inspect.iscoroutinefunction(spec.executor):
+                    operation=spec.executor(arguments)
+                else:
+                    async def invoke_sync():
+                        result=await asyncio.to_thread(spec.executor,arguments)
+                        return await result if inspect.isawaitable(result) else result
+                    operation=invoke_sync()
+                task=asyncio.create_task(operation);self._pending.add(task)
+                try:value=await asyncio.wait_for(task,timeout=spec.timeout)
+                finally:self._pending.discard(task)
                 self._failures.pop(name,None)
                 return ActionResult(ActionStatus.SUCCESS,"Action completed",value,duration_ms=(monotonic()-started)*1000)
             except asyncio.CancelledError:return ActionResult(ActionStatus.CANCELLED,"Action was cancelled",duration_ms=(monotonic()-started)*1000)

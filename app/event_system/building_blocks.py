@@ -30,13 +30,23 @@ class AgentBlueprint:
     risk_policy: str = "medium"
 
     def create(self, manager, parent_agent_id: str, *, task: str | None = None):
+        parent = manager.get_agent(parent_agent_id)
+        if parent.allowed_applications and not self.allowed_applications.issubset(parent.allowed_applications):
+            raise PermissionError("Child application boundary exceeds its parent")
+        if parent.allowed_directories:
+            parent_roots = tuple(Path(item).expanduser().resolve() for item in parent.allowed_directories)
+            if any(not any(Path(item).expanduser().resolve().is_relative_to(root) for root in parent_roots)
+                   for item in self.allowed_directories):
+                raise PermissionError("Child directory boundary exceeds its parent")
+        if self.risk_policy.casefold() not in {"low", "medium", "high", "critical"}:
+            raise ValueError("Unknown agent risk policy")
         agent = manager.create_agent(parent_agent_id, self.name, self.purpose, self.purpose,
             task=task, permissions=set(self.permissions), tools=set(self.tools))
         manager.set_event_subscriptions(parent_agent_id, agent.agent_id, set(self.subscriptions))
         agent.resource_limits = dict(self.resource_limits)
         if self.maximum_runtime is not None: agent.resource_limits["max_runtime"] = self.maximum_runtime
-        agent.allowed_applications = set(self.allowed_applications)
-        agent.allowed_directories = set(self.allowed_directories)
+        agent.allowed_applications = set(self.allowed_applications or parent.allowed_applications)
+        agent.allowed_directories = set(self.allowed_directories or parent.allowed_directories)
         agent.risk_policy = self.risk_policy
         return agent
 
@@ -101,6 +111,9 @@ class AgentActionExecutor:
 
     async def execute(self, agent, action_name: str, **arguments: Any) -> ActionResult:
         spec = self.registry.get(action_name)
+        risk_order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+        if spec is not None and risk_order[spec.risk_level.value] > risk_order.get(agent.risk_policy.casefold(), 1):
+            return ActionResult(ActionStatus.DENIED, "Action exceeds the agent risk policy")
         if spec is not None and spec.category == "filesystem" and agent.allowed_directories:
             roots = tuple(Path(root).expanduser().resolve() for root in agent.allowed_directories)
             for key in ("path", "source", "destination"):

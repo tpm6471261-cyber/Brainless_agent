@@ -8,3 +8,6 @@ dangerous actions, and emergency stop independently blocks new actions while pre
 Process ID 0 through 4 is always treated as protected by the built-in termination action. The project never
 auto-confirms UAC or credential prompts and never registers actions to weaken Defender, firewall, credentials,
 or other Windows security controls. Clipboard events contain only type and length, never clipboard content.
+Printable key names are redacted by default and are always redacted in configured sensitive processes or
+windows whose titles indicate password, credential, or sign-in entry. Notification observation records only
+application, title, type, and timestamp; it does not scrape message bodies.

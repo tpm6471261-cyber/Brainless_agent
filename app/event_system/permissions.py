@@ -8,7 +8,7 @@ PERMISSIONS=frozenset({
     "process.control","window.observe","window.control","browser.observe",
     "browser.control","network.observe","device.observe","audio.observe",
     "audio.control","system.observe","system.control","power.control",
-    "security.observe","ui.observe","ui.control",
+    "security.observe","ui.observe","ui.control","notification.observe","session.observe",
 })
 
 EVENT_CATEGORY_PERMISSIONS={
@@ -17,7 +17,8 @@ EVENT_CATEGORY_PERMISSIONS={
     "window":"window.observe","browser":"browser.observe","network":"network.observe",
     "device":"device.observe","audio":"audio.observe","system":"system.observe",
     "power":"system.observe","security":"security.observe","ui":"ui.observe",
-    "scheduler":"system.observe","resources":"system.observe",
+    "scheduler":"system.observe","resources":"system.observe","notification":"notification.observe",
+    "session":"session.observe",
 }
 
 def permission_for_event(category:str) -> str:

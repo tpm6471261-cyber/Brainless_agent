@@ -8,6 +8,10 @@ new executions. Three terminal integration failures open a circuit until the ope
 
 Registered desktop actions include mouse movement/click/button/scroll/drag, keyboard key down/up/press/text/
 hotkey/sequence, clipboard read/write/clear, file create/copy/move/rename/delete/open and folder create/delete,
-process start/safe terminate, screenshot/region capture, window minimize/maximize/restore/close/move/resize/
-focus, and opening a URL in the default browser. `discover_agent_actions()` exposes only registrations whose
+process start/safe terminate/application focus, screenshot/region capture/screen size/monitor inventory,
+window minimize/maximize/restore/close/move/resize/focus/activate, opening a browser/URL, and explicitly
+confirmed Windows sleep/hibernate/shutdown/restart requests. `discover_agent_actions()` exposes only registrations whose
 permissions the requesting agent currently holds.
+
+`AgentActionExecutor` additionally enforces each agent's allowed directories, allowed applications, action
+rate/concurrency/runtime limits, and maximum risk policy before entering the registry.
