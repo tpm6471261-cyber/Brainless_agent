@@ -17,8 +17,6 @@ from app.perception.models import (PerceptionObservation, UIElement, WindowDispl
 from app.perception.sources import (ComputerControllerSource, DesktopWindowPerceptionSource,
                                     FilesystemPerceptionSource)
 from app.perception.user_guidance import ScreenRegion, UserGuidancePerceptionSource
-from app.perception.models import PerceptionObservation, UIElement
-from app.perception.sources import ComputerControllerSource, FilesystemPerceptionSource
 from tests.test_voice import runtime
 
 

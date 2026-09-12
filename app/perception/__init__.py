@@ -12,10 +12,6 @@ from app.perception.sources import (BrowserDOMSource, ComputerControllerSource,
 from app.perception.context import CommandSource, ContextBuilder, MultimodalCommand
 from app.perception.providers import SpeechOutputProvider, SpeechRecognitionProvider, VisualUnderstandingProvider
 from app.perception.user_guidance import DesktopRegionSelector, ScreenRegion, UserGuidancePerceptionSource
-)
-from app.perception.sources import BrowserDOMSource, ComputerControllerSource, FilesystemPerceptionSource, PerceptionSource
-from app.perception.context import CommandSource, ContextBuilder, MultimodalCommand
-from app.perception.providers import SpeechOutputProvider, SpeechRecognitionProvider, VisualUnderstandingProvider
 
 __all__ = ["BrowserDOMSource", "CommandSource", "ComputerControllerSource", "ContextBuilder", "EnvironmentChange", "EnvironmentSnapshot",
            "MultimodalPerceptionEngine", "PerceptionFusionEngine", "PerceptionObservation",
@@ -23,4 +19,3 @@ __all__ = ["BrowserDOMSource", "CommandSource", "ComputerControllerSource", "Con
            "FilesystemPerceptionSource", "MultimodalCommand", "SpeechOutputProvider", "SpeechRecognitionProvider", "UIElement",
            "VisualUnderstandingProvider", "DesktopRegionSelector", "ScreenRegion", "UserGuidancePerceptionSource",
            "DesktopWindowPerceptionSource", "WindowDisplayState", "WindowInfo"]
-           "VisualUnderstandingProvider"]

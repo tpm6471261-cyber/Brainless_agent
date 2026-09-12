@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 import json
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -77,6 +78,30 @@ def test_dashboard_http_api_auth_static_load_and_replay(tmp_path):
         server.close()
 
 
+def test_dashboard_http_snapshot_reads_sqlite_stores_created_on_runtime_thread(tmp_path):
+    from app.learning.core import SkillRegistry
+    from app.memory.sqlite_memory import SQLiteMemory
+
+    runtime, _, _ = dashboard(tmp_path)
+    memory = SQLiteMemory(tmp_path / "memory.db")
+    skills = SkillRegistry(tmp_path / "skills.db")
+    runtime = replace(runtime, memory=memory, skills=skills)
+    server = DashboardServer(DashboardService(runtime), RuntimeCommandGateway(runtime, TOKEN))
+    server.start()
+    host, port = server.address
+    request = Request(f"http://{host}:{port}/api/system",
+                      headers={"Authorization": f"Bearer {TOKEN}"})
+    try:
+        payload = json.loads(urlopen(request, timeout=2).read())
+        assert payload["skills"] == []
+        assert payload["memory"] == []
+        assert payload["inventory"]["skills"] == 0
+    finally:
+        server.close()
+        skills.close()
+        memory.close()
+
+
 def test_dashboard_event_history_survives_gateway_restart(tmp_path):
     from app.autonomy.event_store import EventStore
     path = tmp_path / "events.db"
@@ -96,6 +121,8 @@ def test_authorized_create_mission_uses_operator_and_validates_input(tmp_path):
     result = asyncio.run(gateway.execute(TOKEN, "create_mission", {"goal": "Monitor project", "priority": 4}))
     mission = runtime.missions.load(runtime.events.replay()[-1].mission_id)
     assert result["accepted"] and mission.goal == "Monitor project" and mission.priority == 4
+    assert sum(event.type is EventType.MISSION_TRIGGERED
+               for event in runtime.events.replay()) == 1
     with pytest.raises(ValueError):
         asyncio.run(gateway.execute(TOKEN, "create_mission", {"goal": ""}))
 

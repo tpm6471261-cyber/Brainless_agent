@@ -174,6 +174,21 @@ python run.py       # starts and opens the authenticated Command Center
 python run.py cli   # legacy interactive task CLI
 ```
 
+The CLI normally submits a task to the selected chatbot website and prints its advisory response.
+Email requests use a guided browser workflow: the chatbot must return bounded JSON steps, missing
+values are requested in a native popup (with terminal fallback), Chrome is reused when already open,
+and semantic controls are used to operate the authenticated Gmail website. The final Send click
+requires explicit confirmation. Successful workflows persist only structural labels and host names;
+recipients, message bodies, answers, credentials, selectors, and coordinates are not learned.
+
+The autonomous task engine has a continuous, evidence-driven learning loop. Every run through
+`run_with_learning` records its verified outcome, reuses an existing candidate instead of creating
+duplicates, recalculates success and verification metrics, and promotes a repeatable candidate to
+`tested` only after the configured minimum number of successful runs. Human approval is still
+required before activation; later outcome regressions deprecate an approved skill. Learned steps
+remain advisory and are revalidated against current tools, permissions, contracts, and environment
+before every reuse.
+
 When no `BRAINLESS_DASHBOARD_TOKEN` is configured, `run.py` generates a cryptographically random per-run token and prints it to the local terminal. The Perception page can accept an explicit owner-labelled desktop rectangle (for example, “Search box” or “Continue button”); the selection becomes non-executable perception evidence and still passes through normal target resolution, policy, permission, execution, observation, and verification boundaries.
 
 The Perception page also shows real desktop-window inventory with active, normal, minimized, maximized, and fullscreen states when native enumeration is available. Window-state collection currently uses PyGetWindow's supported Windows backend; other platforms remain explicitly unavailable rather than reporting guessed state.
