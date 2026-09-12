@@ -175,14 +175,19 @@ class AutonomousTaskEngine:
             capabilities_used=tuple(sorted({capability for node in chosen.tasks.values() for capability in node.capabilities})),
             tools_used=tuple(sorted({node.tool for node in chosen.tasks.values() if node.tool})),
             failures=(result.blocked_reason,) if result.blocked_reason else ())
-        self.learning.record(experience, candidate_name=candidate_name, candidate_description=candidate_description)
+        learned_skill = self.learning.record(
+            experience, candidate_name=candidate_name,
+            candidate_description=candidate_description,
+        )
         if self.performance:
             for agent_id in experience.agents_used:
                 self.performance.record(agent_id, task_type, environment.get("app", "unknown"), success=experience.success,
                     verified=experience.verified, duration_ms=experience.execution_time_ms,
                     resource_cost=sum(experience.resource_usage.values()))
         self._journal(task.task_id, "LEARNING_EXPERIENCE_STORED", {"reused_skills": [skill.skill_id for skill in advice.skills],
-                                                                    "success": experience.success})
+            "success": experience.success,
+            "learned_skill_id": learned_skill.skill_id if learned_skill else None,
+            "learned_skill_status": learned_skill.status.value if learned_skill else None})
         return result
 
     def _checkpoint(self, task: AutonomousTask, graph: TaskGraph) -> None:

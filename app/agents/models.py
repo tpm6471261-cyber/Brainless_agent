@@ -58,6 +58,11 @@ class Agent:
     parent_agent_id: str | None = None
     permissions: set[str] = field(default_factory=set)
     available_tools: set[str] = field(default_factory=set)
+    event_subscriptions: set[str] = field(default_factory=set)
+    resource_limits: dict[str, float] = field(default_factory=dict)
+    allowed_applications: set[str] = field(default_factory=set)
+    allowed_directories: set[str] = field(default_factory=set)
+    risk_policy: str = "medium"
     context: dict[str, str] = field(default_factory=dict)
     agent_id: str = field(default_factory=lambda: str(uuid4()))
     status: AgentStatus = AgentStatus.CREATED
