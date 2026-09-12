@@ -40,6 +40,24 @@ class AgentBlueprint:
         agent.risk_policy = self.risk_policy
         return agent
 
+def create_event_agent(manager, parent_agent_id: str, *, name: str, purpose: str,
+                       permissions=(), tools=(), subscriptions=(), resource_limits=None,
+                       maximum_runtime=None, allowed_applications=(), allowed_directories=(),
+                       risk_policy="medium", task=None):
+    """Functional agent factory for callers that do not need to retain a blueprint."""
+    return AgentBlueprint(name=name,purpose=purpose,permissions=frozenset(permissions),
+        tools=frozenset(tools),subscriptions=frozenset(subscriptions),
+        resource_limits=dict(resource_limits or {}),maximum_runtime=maximum_runtime,
+        allowed_applications=frozenset(allowed_applications),allowed_directories=frozenset(allowed_directories),
+        risk_policy=risk_policy).create(manager,parent_agent_id,task=task)
+
+def discover_agent_actions(registry: ActionRegistry, agent) -> tuple[dict[str, Any], ...]:
+    """Return serializable action metadata filtered to an agent's current authority."""
+    return tuple({"action_name":spec.action_name,"description":spec.description,"category":spec.category,
+        "required_permissions":sorted(spec.required_permissions),"risk_level":spec.risk_level.value,
+        "input_schema":sorted(spec.input_schema),"output_schema":spec.output_schema}
+        for spec in registry.available(agent.permissions))
+
 
 class AgentResourceLimiter:
     """Enforce event/action rate and concurrency limits without granting authority."""
