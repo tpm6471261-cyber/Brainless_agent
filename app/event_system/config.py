@@ -20,6 +20,12 @@ class EventSystemConfig:
     keyboard_observation: bool = False
     clipboard_observation: bool = False
     mouse_observation: bool = False
+    mouse_button_observation: bool = False
+    window_observation: bool = True
+    device_observation: bool = False
+    audio_observation: bool = False
+    session_observation: bool = False
+    notification_observation: bool = False
     screen_observation: bool = True
     filesystem_enabled: bool = True
     browser_enabled: bool = True
@@ -36,6 +42,12 @@ class EventSystemConfig:
             keyboard_observation=_boolean(values.get("keyboard", {}).get("observation")),
             clipboard_observation=_boolean(values.get("clipboard", {}).get("observation")),
             mouse_observation=_boolean(values.get("mouse", {}).get("observation")),
+            mouse_button_observation=_boolean(values.get("mouse", {}).get("button_observation")),
+            window_observation=_boolean(values.get("window", {}).get("observation"), True),
+            device_observation=_boolean(values.get("devices", {}).get("observation")),
+            audio_observation=_boolean(values.get("audio", {}).get("observation")),
+            session_observation=_boolean(values.get("session", {}).get("observation")),
+            notification_observation=_boolean(values.get("notifications", {}).get("observation")),
             screen_observation=_boolean(values.get("screen", {}).get("observation"), True),
             filesystem_enabled=_boolean(values.get("filesystem", {}).get("enabled"), True),
             browser_enabled=_boolean(values.get("browser", {}).get("enabled"), True),

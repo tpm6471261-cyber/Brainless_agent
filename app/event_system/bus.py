@@ -23,6 +23,7 @@ class EventBus:
         self._subscriptions: dict[str, tuple[EventSubscription, EventHandler]]={}
         self._last_delivery: dict[tuple[str,str], float]={}; self._dedupe: dict[str,float]={}
         self.paused=False; self._queue: asyncio.PriorityQueue=asyncio.PriorityQueue(); self._sequence=0
+        self._routing_lock=asyncio.Lock()
     def subscribe(self, subscription: EventSubscription, handler: EventHandler) -> None:
         self._subscriptions[subscription.subscriber_id]=(subscription,handler)
     def unsubscribe(self, subscriber_id: str) -> None: self._subscriptions.pop(subscriber_id,None)
@@ -30,20 +31,25 @@ class EventBus:
         fingerprint=hashlib.sha256(json.dumps([event.event_type,event.source,event.process,event.window,event.data],sort_keys=True,default=str).encode()).hexdigest()
         now=monotonic(); last=self._dedupe.get(fingerprint)
         if last is not None and now-last < self.dedupe_seconds: return False
-        self._dedupe[fingerprint]=now; self.history.append(event)
-        if self.paused: return True
-        self._sequence += 1; await self._queue.put((-event.priority,self._sequence,event)); await self.route_pending(); return True
+        self._dedupe[fingerprint]=now
+        if len(self._dedupe)>10_000:
+            self._dedupe={key:value for key,value in self._dedupe.items() if now-value<self.dedupe_seconds}
+        self.history.append(event)
+        self._sequence += 1; await self._queue.put((-event.priority,self._sequence,event))
+        if not self.paused: await self.route_pending()
+        return True
     async def route_pending(self) -> None:
-        while not self._queue.empty():
-            _,_,event=await self._queue.get(); now=monotonic()
-            for key,(subscription,handler) in tuple(self._subscriptions.items()):
-                if not subscription.event_filter.matches(event): continue
-                previous=self._last_delivery.get((key,event.event_type),-1e9)
-                interval=max(subscription.debounce_seconds,subscription.throttle_seconds)
-                if now-previous < interval: continue
-                result=handler(event)
-                if hasattr(result,"__await__"): await result
-                self._last_delivery[(key,event.event_type)]=now
+        async with self._routing_lock:
+            while not self._queue.empty() and not self.paused:
+                _,_,event=await self._queue.get(); now=monotonic()
+                for key,(subscription,handler) in tuple(self._subscriptions.items()):
+                    if not subscription.event_filter.matches(event): continue
+                    previous=self._last_delivery.get((key,event.event_type),-1e9)
+                    interval=max(subscription.debounce_seconds,subscription.throttle_seconds)
+                    if now-previous < interval: continue
+                    result=handler(event)
+                    if hasattr(result,"__await__"): await result
+                    self._last_delivery[(key,event.event_type)]=now
     async def replay(self, *, event_type: str | None=None, since=None) -> int:
         """Route retained events without duplicating them in history."""
         events=self.history.replay(event_type=event_type,since=since)
@@ -69,7 +75,7 @@ class EventManager:
         emitted=[]
         for detector in self.detectors:
             try:events=await detector.poll()
-            except (ImportError,OSError,RuntimeError) as error:
+            except Exception as error:
                 self.unavailable[getattr(detector,"name",type(detector).__name__)]=str(error);continue
             for event in events: await self.bus.publish(event); emitted.append(event)
         return tuple(emitted)

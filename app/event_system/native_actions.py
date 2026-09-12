@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import webbrowser
+import sys
 from pathlib import Path
 from app.event_system.actions import ActionRegistry, ActionSpec, RiskLevel
 
@@ -24,6 +25,31 @@ def register_desktop_actions(registry: ActionRegistry) -> None:
         pid=int(a["pid"])
         if pid<=4:raise PermissionError("Protected system process termination is forbidden")
         os.kill(pid,15);return True
+    def get_screen_size(_):
+        size=pyauto().size();return {"width":int(size[0]),"height":int(size[1])}
+    def get_monitors(_):
+        if sys.platform!="win32":
+            size=get_screen_size({});return [{"id":0,"primary":True,"x":0,"y":0,**size}]
+        import ctypes
+        from ctypes import wintypes
+        monitors=[]
+        callback_type=ctypes.WINFUNCTYPE(ctypes.c_bool,wintypes.HMONITOR,wintypes.HDC,ctypes.POINTER(wintypes.RECT),wintypes.LPARAM)
+        def callback(handle,_dc,rect,_data):
+            area=rect.contents;monitors.append({"id":str(handle),"x":area.left,"y":area.top,
+                "width":area.right-area.left,"height":area.bottom-area.top,
+                "primary":area.left==0 and area.top==0});return True
+        if not ctypes.windll.user32.EnumDisplayMonitors(None,None,callback_type(callback),0):raise OSError("EnumDisplayMonitors failed")
+        return monitors
+    def focus_application(a):
+        import pygetwindow
+        wanted=str(a["name"]).casefold()
+        matches=[item for item in pygetwindow.getAllWindows() if wanted in str(item.title).casefold()]
+        if not matches:raise LookupError("Application window was not found")
+        matches[0].activate();return True
+    def request_power(a):
+        _=a
+        if sys.platform!="win32":raise RuntimeError("Power control is available only on Windows")
+        return True
     def open_path(a):
         target=str(path(a["path"]))
         if os.name=="nt":os.startfile(target)  # type: ignore[attr-defined]
@@ -64,8 +90,11 @@ def register_desktop_actions(registry: ActionRegistry) -> None:
         ActionSpec("OPEN_FILE","Open a file with its registered application","filesystem",frozenset({"filesystem.read"}),RiskLevel.MEDIUM,frozenset({"path"}),"path",open_path),
         ActionSpec("START_PROCESS","Start process","process",frozenset({"process.control"}),RiskLevel.MEDIUM,frozenset({"command"}),"pid",start_process),
         ActionSpec("STOP_PROCESS","Terminate process","process",frozenset({"process.control"}),RiskLevel.HIGH,frozenset({"pid"}),"bool",stop_process),
+        ActionSpec("FOCUS_APPLICATION","Focus an application window","process",frozenset({"process.control"}),RiskLevel.MEDIUM,frozenset({"name"}),"bool",focus_application),
         ActionSpec("TAKE_SCREENSHOT","Capture screen","screen",frozenset({"screen.capture"}),RiskLevel.MEDIUM,frozenset({"path"}),"path",lambda a:(pyauto().screenshot(str(path(a["path"]))),str(path(a["path"])))[1]),
         ActionSpec("CAPTURE_REGION","Capture a screen region","screen",frozenset({"screen.capture"}),RiskLevel.MEDIUM,frozenset({"path","x","y","width","height"}),"path",lambda a:(pyauto().screenshot(str(path(a["path"])),region=(int(a["x"]),int(a["y"]),int(a["width"]),int(a["height"]))),str(path(a["path"])))[1]),
+        ActionSpec("GET_SCREEN_SIZE","Get virtual screen size","screen",frozenset({"screen.observe"}),RiskLevel.LOW,frozenset(),"object",get_screen_size),
+        ActionSpec("GET_MONITORS","Enumerate displays","screen",frozenset({"screen.observe"}),RiskLevel.LOW,frozenset(),"array",get_monitors),
         ActionSpec("MINIMIZE_WINDOW","Minimize a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title"}),"none",lambda a:window(a).minimize()),
         ActionSpec("MAXIMIZE_WINDOW","Maximize a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title"}),"none",lambda a:window(a).maximize()),
         ActionSpec("RESTORE_WINDOW","Restore a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title"}),"none",lambda a:window(a).restore()),
@@ -73,6 +102,12 @@ def register_desktop_actions(registry: ActionRegistry) -> None:
         ActionSpec("MOVE_WINDOW","Move a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title","x","y"}),"none",lambda a:window(a).moveTo(int(a["x"]),int(a["y"]))),
         ActionSpec("RESIZE_WINDOW","Resize a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title","width","height"}),"none",lambda a:window(a).resizeTo(int(a["width"]),int(a["height"]))),
         ActionSpec("FOCUS_WINDOW","Focus a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title"}),"none",lambda a:window(a).activate()),
+        ActionSpec("ACTIVATE_WINDOW","Activate a window","window",frozenset({"window.control"}),RiskLevel.MEDIUM,frozenset({"title"}),"none",lambda a:window(a).activate()),
+        ActionSpec("OPEN_BROWSER","Open the default browser","browser",frozenset({"browser.control"}),RiskLevel.MEDIUM,frozenset(),"bool",lambda _:webbrowser.open("about:blank")),
         ActionSpec("OPEN_URL","Open URL in default browser","browser",frozenset({"browser.control"}),RiskLevel.MEDIUM,frozenset({"url"}),"bool",lambda a:webbrowser.open(str(a["url"]))),
+        ActionSpec("REQUEST_SLEEP","Request Windows sleep","power",frozenset({"power.control","system.control"}),RiskLevel.HIGH,frozenset(),"bool",lambda a:(request_power(a),subprocess.run(["rundll32.exe","powrprof.dll,SetSuspendState","0,1,0"],check=True),True)[2]),
+        ActionSpec("REQUEST_HIBERNATE","Request Windows hibernation","power",frozenset({"power.control","system.control"}),RiskLevel.HIGH,frozenset(),"bool",lambda a:(request_power(a),subprocess.run(["shutdown.exe","/h"],check=True),True)[2]),
+        ActionSpec("REQUEST_SHUTDOWN","Request Windows shutdown","power",frozenset({"power.control","system.control"}),RiskLevel.HIGH,frozenset(),"bool",lambda a:(request_power(a),subprocess.run(["shutdown.exe","/s","/t","0"],check=True),True)[2]),
+        ActionSpec("REQUEST_RESTART","Request Windows restart","power",frozenset({"power.control","system.control"}),RiskLevel.HIGH,frozenset(),"bool",lambda a:(request_power(a),subprocess.run(["shutdown.exe","/r","/t","0"],check=True),True)[2]),
     )
     for spec in specs: registry.register(spec)

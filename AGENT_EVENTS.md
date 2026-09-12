@@ -8,3 +8,7 @@ Use `create_event_agent(...)` as the functional building block for future agents
 tools, permissions, subscriptions, resource limits, maximum runtime, allowed applications/directories and a
 risk policy, then delegates to the existing parent-authorized `AgentManager`. `EventChain` composes delay,
 branch, bounded retry, repeat and parallel steps without giving the agent additional authority.
+
+For a complete reusable runtime, call `create_event_platform(config)`, attach an `AgentEventDispatcher`, and
+subscribe only the new agent's declared event types. The platform keeps keyboard, mouse-button, clipboard,
+device, audio, session, and notification observation off unless configuration opts in.

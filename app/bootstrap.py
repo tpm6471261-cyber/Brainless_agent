@@ -19,6 +19,7 @@ from app.autonomy.orchestrator import AutonomousRuntime
 from app.autonomy.task_engine import AutonomousTaskEngine
 from app.safety.intervention import UserInterventionGate
 from app.learning import ExperienceMemory, LearningCoordinator, SkillRegistry, AgentPerformanceMemory
+from app.event_system import create_event_platform
 
 
 class Application:
@@ -28,6 +29,9 @@ class Application:
         tools = ToolRegistry()
         register_runtime_tools(tools, self.browser, root, screenshots=ScreenshotRecorder(root / "screenshots"))
         self.agent_manager = AgentManager(tools, audit_store=self.memory)
+        # Desktop events/actions are composed independently from reasoning. Detectors remain
+        # idle until a caller starts polling, and sensitive observation defaults to off.
+        self.event_platform = create_event_platform()
         self.autonomous_actions = AutonomousActionRuntime(
             self.agent_manager, PlaywrightComputerController(self.browser), audit_store=self.memory)
         self.autonomous = AutonomousRuntime(self.agent_manager, self.autonomous_actions)
@@ -48,6 +52,8 @@ class Application:
         )
 
     async def close(self) -> None:
+        self.event_platform.emergency_stop()
+        self.event_platform.manager.stop()
         self.experience_memory.close()
         self.skill_registry.close()
         self.agent_performance.close()

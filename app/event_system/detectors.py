@@ -13,17 +13,28 @@ class FilesystemDetector:
         for root in self.paths:
             if not root.exists():continue
             for path in list(root.rglob("*"))[:self.limit]:
-                try: stat=path.stat();current[str(path)]=(path.is_dir(),stat.st_size,stat.st_mtime_ns)
+                try: stat=path.stat();current[str(path)]=(path.is_dir(),stat.st_size,stat.st_mtime_ns,stat.st_ino,stat.st_ctime_ns)
                 except OSError:continue
         events=[]
+        removed={path:value for path,value in self._previous.items() if path not in current}
+        added={path:value for path,value in current.items() if path not in self._previous}
+        removed_by_inode={value[3]:path for path,value in removed.items() if value[3]}
+        moved={path:removed_by_inode[value[3]] for path,value in added.items()
+               if value[3] and value[3] in removed_by_inode}
         for path,value in current.items():
             old=self._previous.get(path);kind="FOLDER" if value[0] else "FILE"
-            if old is None: event_type=f"ON_{kind}_CREATED"
+            if path in moved:
+                old_path=moved[path]; old_parent=Path(old_path).parent
+                event_type=f"ON_{kind}_{'RENAMED' if old_parent==Path(path).parent else 'MOVED'}"
+            elif old is None: event_type=f"ON_{kind}_CREATED"
             elif old!=value:event_type="ON_FILE_SIZE_CHANGED" if old[1]!=value[1] and not value[0] else f"ON_{kind}_MODIFIED"
             else:continue
-            p=Path(path);events.append(Event(event_type,"filesystem",self.name,data={"path":path,"filename":p.name,"extension":p.suffix,"size":value[1],"directory":str(p.parent)},permissions_required=frozenset({"filesystem.read"})))
+            p=Path(path);data={"path":path,"filename":p.name,"extension":p.suffix,"size":value[1],
+                "directory":str(p.parent),"creation_time_ns":value[4],"modified_time_ns":value[2]}
+            if path in moved:data["previous_path"]=moved[path]
+            events.append(Event(event_type,"filesystem",self.name,data=data,permissions_required=frozenset({"filesystem.read"})))
         for path,old in self._previous.items():
-            if path not in current:events.append(Event(f"ON_{'FOLDER' if old[0] else 'FILE'}_DELETED","filesystem",self.name,data={"path":path},permissions_required=frozenset({"filesystem.read"})))
+            if path not in current and path not in moved.values():events.append(Event(f"ON_{'FOLDER' if old[0] else 'FILE'}_DELETED","filesystem",self.name,data={"path":path},permissions_required=frozenset({"filesystem.read"})))
         self._previous=current;return tuple(events)
 
 class ResourceDetector:
@@ -44,16 +55,19 @@ class WindowsCapabilityReport:
     def detect() -> dict[str,str]:
         windows=sys.platform=="win32"
         installed=lambda name:importlib.util.find_spec(name) is not None
-        return {"Mouse":"PARTIAL" if installed("pyautogui") else "OPTIONAL FEATURE UNAVAILABLE",
-            "Keyboard":"PARTIAL" if installed("pyautogui") else "OPTIONAL FEATURE UNAVAILABLE",
+        powershell=windows and shutil.which("powershell.exe") is not None
+        return {"Mouse":"AVAILABLE" if windows and installed("pyautogui") else "PARTIAL" if windows or installed("pyautogui") else "OPTIONAL FEATURE UNAVAILABLE",
+            "Keyboard":"AVAILABLE" if windows and installed("pyautogui") else "PARTIAL" if windows or installed("pyautogui") else "OPTIONAL FEATURE UNAVAILABLE",
             "Window Events":"PARTIAL" if installed("pygetwindow") else "OPTIONAL FEATURE UNAVAILABLE",
             "Process Events":"AVAILABLE" if windows else "UNAVAILABLE", "Filesystem":"AVAILABLE",
             "Clipboard":"PARTIAL" if installed("pyperclip") else "OPTIONAL FEATURE UNAVAILABLE",
             "Screen":"PARTIAL" if installed("pyautogui") else "OPTIONAL FEATURE UNAVAILABLE",
-            "UI Automation":"OPTIONAL FEATURE UNAVAILABLE",
+            "UI Automation":"PARTIAL" if windows and installed("pygetwindow") else "OPTIONAL FEATURE UNAVAILABLE",
             "Browser":"PARTIAL",
-            "Network":"AVAILABLE", "USB":"OPTIONAL FEATURE UNAVAILABLE",
-            "Audio":"OPTIONAL FEATURE UNAVAILABLE", "Power":"AVAILABLE" if windows else "UNAVAILABLE",
+            "Network":"AVAILABLE", "USB":"AVAILABLE" if powershell else "OPTIONAL FEATURE UNAVAILABLE",
+            "Audio":"PARTIAL" if powershell else "OPTIONAL FEATURE UNAVAILABLE", "Power":"AVAILABLE" if windows else "UNAVAILABLE",
+            "Notifications":"PARTIAL" if windows and installed("pygetwindow") else "OPTIONAL FEATURE UNAVAILABLE",
+            "Sessions":"AVAILABLE" if powershell else "UNAVAILABLE",
             "Scheduler":"AVAILABLE", "Resources":"AVAILABLE"}
 
 class MousePositionDetector:
@@ -162,6 +176,25 @@ class WindowDetector(SnapshotDetector):
     def __init__(self,reader=None) -> None:
         super().__init__(reader or self.read_windows,category="window",created="ON_WINDOW_CREATED",
             removed="ON_WINDOW_DESTROYED",permission="window.observe")
+    async def poll(self):
+        current=dict(self.reader());events=[]
+        for key,value in current.items():
+            if key not in self.previous:
+                events.extend((self._event("ON_WINDOW_CREATED",key,value),self._event("ON_WINDOW_OPENED",key,value)))
+                continue
+            old=self.previous[key]
+            changes=(("title","ON_WINDOW_TITLE_CHANGED"),("position","ON_WINDOW_MOVED"),
+                     ("size","ON_WINDOW_RESIZED"),("visible","ON_WINDOW_VISIBILITY_CHANGED"))
+            for field,event_type in changes:
+                if value.get(field)!=old.get(field):events.append(self._event(event_type,key,value,{f"previous_{field}":old.get(field)}))
+            if value.get("state")!=old.get("state"):
+                state=str(value.get("state","normal")).upper()
+                kind="ON_WINDOW_RESTORED" if state=="NORMAL" else f"ON_WINDOW_{state}" if state in {"MINIMIZED","MAXIMIZED"} else "ON_WINDOW_STATE_CHANGED"
+                events.append(self._event(kind,key,value,{"previous_state":old.get("state")}))
+                if kind!="ON_WINDOW_STATE_CHANGED":events.append(self._event("ON_WINDOW_STATE_CHANGED",key,value,{"previous_state":old.get("state")}))
+        for key,value in self.previous.items():
+            if key not in current:events.extend((self._event("ON_WINDOW_DESTROYED",key,value),self._event("ON_WINDOW_CLOSED",key,value)))
+        self.previous=current;self.initialized=True;return tuple(events)
 
 class PowerDetector:
     """Read Windows SYSTEM_POWER_STATUS and emit battery/power transitions."""
