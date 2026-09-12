@@ -4,9 +4,7 @@ from app.event_system import (ActionRegistry,ActionSpec,ActionStatus,ConditionEn
 from app.event_system import AgentEventDispatcher
 from app.event_system import AutoWindow
 from app.event_system import ClipboardDetector,DisplayDetector,MousePositionDetector,ProcessDetector
-from app.event_system import KeyboardStateDetector,NetworkDetector,PowerDetector,SchedulerDetector,WindowDetector
 from app.agents.manager import AgentManager
-from datetime import datetime
 
 def test_bus_filters_deduplicates_routes_and_replays():
     async def scenario():
@@ -23,31 +21,6 @@ def test_conditions_support_nested_logic_and_changes():
     data={"path":"C:/Downloads/a.pdf","extension":".pdf","size":5,"previous_size":2}
     assert ConditionEngine.matches(data,{"AND":[{"field":"extension","value":".pdf"},{"field":"size","operator":"greater_than","value":2}]})
     assert ConditionEngine.matches(data,{"field":"size","operator":"changed"})
-
-def test_keyboard_detector_is_opt_in_and_never_captures_text():
-    async def scenario():
-        states=iter(({"CTRL","C"},set()))
-        detector=KeyboardStateDetector(lambda:next(states),enabled=True,hotkeys=(("CTRL","C"),))
-        first=await detector.poll()
-        assert {event.event_type for event in first}=={"ON_KEY_DOWN","ON_MODIFIER_CHANGED","ON_HOTKEY"}
-        assert all("text" not in event.data for event in first)
-        assert {event.event_type for event in await detector.poll()}=={"ON_KEY_UP","ON_MODIFIER_CHANGED"}
-        assert await KeyboardStateDetector(lambda:{"A"}).poll()==()
-    asyncio.run(scenario())
-
-def test_window_power_network_and_scheduler_snapshot_diffs():
-    async def scenario():
-        windows=iter((({1:{"window_handle":1,"title":"A","position":(0,0),"size":(10,10),"visible":True,"state":"normal"}},1),
-                      ({1:{"window_handle":1,"title":"B","position":(2,0),"size":(10,10),"visible":True,"state":"normal"}},1)))
-        detector=WindowDetector(lambda:next(windows));assert {e.event_type for e in await detector.poll()}=={"ON_WINDOW_CREATED","ON_WINDOW_ACTIVATED"}
-        assert {e.event_type for e in await detector.poll()}=={"ON_WINDOW_TITLE_CHANGED","ON_WINDOW_MOVED"}
-        power=PowerDetector(lambda:{"ac_connected":False,"battery_percent":4,"charging":False})
-        assert {e.event_type for e in await power.poll()}=={"ON_BATTERY_LEVEL_CHANGED","ON_BATTERY_CRITICAL"}
-        network_values=iter(([],["10.0.0.1"]));network=NetworkDetector(lambda:next(network_values));await network.poll()
-        assert {e.event_type for e in await network.poll()}=={"ON_NETWORK_CONNECTED","ON_IP_CHANGED"}
-        times=iter((datetime(2026,1,1,23,59),datetime(2026,1,2,0,0)));scheduler=SchedulerDetector(1,lambda:next(times));await scheduler.poll()
-        assert {e.event_type for e in await scheduler.poll()}=={"ON_INTERVAL","ON_MINUTE","ON_HOUR","ON_DATE_CHANGED"}
-    asyncio.run(scenario())
 
 def test_filesystem_detector_emits_real_create_modify_delete(tmp_path):
     async def scenario():

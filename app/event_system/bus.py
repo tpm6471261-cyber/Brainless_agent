@@ -58,7 +58,5 @@ class EventManager:
     async def poll_once(self) -> tuple[Event,...]:
         emitted=[]
         for detector in self.detectors:
-            try: events=await detector.poll()
-            except (ImportError,OSError,RuntimeError): continue
-            for event in events: await self.bus.publish(event); emitted.append(event)
+            for event in await detector.poll(): await self.bus.publish(event); emitted.append(event)
         return tuple(emitted)

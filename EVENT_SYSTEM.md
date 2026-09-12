@@ -14,7 +14,3 @@ mouse-position changes, privacy-safe clipboard changes, resolution changes, and 
 Partial/platform adapter required: browser, network, power. Windows hooks for mouse buttons/wheels, keyboard,
 window, UI Automation, devices, audio, sessions, notifications and security are unavailable until their
 optional native adapters are installed; the capability report states this rather than fabricating events.
-
-Reusable agent construction and workflow primitives live in `app.event_system.building_blocks`. Structured
-rotating audit streams are provided by `StructuredEventLogger`; safe defaults are represented by
-`EventSystemConfig` and honor `DRY_RUN` from the environment.

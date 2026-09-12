@@ -7,32 +7,20 @@ import subprocess
 from pathlib import Path
 from app.event_system.actions import ActionRegistry
 from app.event_system.bus import EventBus, EventManager
-from app.event_system.detectors import (DisplayDetector,FilesystemDetector,KeyboardStateDetector,
-    MousePositionDetector,NetworkDetector,PowerDetector,ProcessDetector,ResourceDetector,
-    SchedulerDetector,WindowDetector,WindowsCapabilityReport)
+from app.event_system.detectors import FilesystemDetector, ResourceDetector, WindowsCapabilityReport
 from app.event_system.native_actions import register_desktop_actions
 from app.safety.redaction import redact
 
 class AutoWindow:
-    def __init__(self, *, permissions=(), watch_paths=(), dry_run=False, confirm=None,
-                 observe_keyboard=False,observe_mouse=False) -> None:
+    def __init__(self, *, permissions=(), watch_paths=(), dry_run=False, confirm=None) -> None:
         self.permissions=set(permissions);self.variables={};self.bus=EventBus()
         self.actions=ActionRegistry(dry_run=dry_run,confirm=confirm)
         register_desktop_actions(self.actions)
-        detectors=[FilesystemDetector(watch_paths),ResourceDetector(),NetworkDetector(),PowerDetector(),
-                   ProcessDetector(),WindowDetector(),DisplayDetector(),SchedulerDetector()]
-        if observe_mouse:detectors.append(MousePositionDetector())
-        if observe_keyboard:detectors.append(KeyboardStateDetector(enabled=True))
-        self.events=EventManager(self.bus,detectors)
+        self.events=EventManager(self.bus,(FilesystemDetector(watch_paths),ResourceDetector()))
     async def call_action(self,name:str,**arguments): return await self.actions.execute(name,arguments,self.permissions)
     def call_action_sync(self,name:str,**arguments): return asyncio.run(self.call_action(name,**arguments))
     def set_variable(self,name:str,value): self.variables[name]=value
     def get_variable(self,name:str,default=None): return self.variables.get(name,default)
-    def delete_variable(self,name:str): return self.variables.pop(name,None)
-    def list_actions(self):
-        return tuple({"name":spec.action_name,"description":spec.description,"category":spec.category,
-            "permissions":sorted(spec.required_permissions),"risk":spec.risk_level.value,"inputs":sorted(spec.input_schema)}
-            for spec in self.actions.available(self.permissions))
     async def poll_events(self): return await self.events.poll_once()
     def emergency_stop(self): self.actions.emergency_stop();self.bus.paused=True
     def resume_agent_system(self): self.actions.resume();self.bus.paused=False

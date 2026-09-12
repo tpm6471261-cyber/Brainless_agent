@@ -19,7 +19,6 @@ class ActionRegistry:
     def register(self,spec:ActionSpec) -> None:
         if spec.action_name in self._actions: raise ValueError("Action already registered")
         self._actions[spec.action_name]=spec
-    def get(self,name:str) -> ActionSpec | None:return self._actions.get(name)
     def available(self,permissions:set[str]) -> tuple[ActionSpec,...]:
         return tuple(x for x in self._actions.values() if x.required_permissions.issubset(permissions))
     def emergency_stop(self) -> None: self.stopped=True
