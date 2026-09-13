@@ -33,6 +33,22 @@ The current implementation is an end-to-end browser-driven MVP:
 5. Runs multiple named providers and asks the selected synthesis provider to compare their labelled responses.
 6. Uses a logged runtime state machine, bounded response-extraction recovery, action/time budgets, and a cooperative emergency-stop latch.
 
+Each rendered prompt receives a dedicated tab for each selected provider, so ChatGPT and Gemini prompts never
+overwrite one another. Claude uses the same flow as an optional best-effort provider: if it fails after another
+provider has succeeded, the run continues with the successful results. The application saves only a SHA-256 prompt
+identifier and the provider-owned conversation URL in `data/conversation-urls.json`; prompt text is not written to
+that index. On the next run, an exact saved conversation URL is restored. Browser windows and tabs stay open for the
+life of `run.py` and are closed only as part of application shutdown.
+
+Before an autonomous task is assigned, the dashboard runtime uses a two-prompt agent-planning workflow. Prompt 1
+receives the task, required authority, and a metadata-only inventory of existing agents, then proposes reuse or
+creation as strict JSON. The runtime independently checks that proposal against the authoritative registry. Only when
+no eligible agent exists does Prompt 2 receive the required permissions and registered function descriptions. Its
+strict JSON definition is validated against the runtime requirements. The runtime writes and executes a fixed,
+data-only Python definition artifact, creates the child through `AgentManager`, assigns exactly the validated tools and
+permissions, and then uses the existing audited action/verification loop. Provider-supplied Python is never executed;
+it cannot bypass parent authority, tool registration, policy, approval, or verification.
+
 The provider interface and adapters are implemented now so the runtime has no provider-specific branches. Gemini and Claude selectors are included, but their current UIs evolve frequently; verify the configured DOM selectors after logging in. The desktop GUI and bounded DOM/clipboard/OCR response-extraction fallbacks are available now. A system-wide emergency hotkey and visual-anchor discovery remain future work.
 
 ## Architecture
