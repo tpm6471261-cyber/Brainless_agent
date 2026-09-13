@@ -45,10 +45,11 @@ class CapabilityAnalyzer:
 class AutonomousRuntime:
     def __init__(self, manager: AgentManager, actions: ActionRuntime,
                  registry: AgentRegistry | None = None, analyzer: CapabilityAnalyzer | None = None,
-                 reasoning_provider=None) -> None:
+                 reasoning_provider=None, agent_planner=None) -> None:
         self.manager, self.actions = manager, actions
         self.registry, self.analyzer = registry or AgentRegistry(), analyzer or CapabilityAnalyzer()
         self.reasoning_provider = reasoning_provider
+        self.agent_planner = agent_planner
         self.factory = AgentFactory(manager)
 
     async def execute(self, root_agent_id: str, task_id: str, task: str, decider: DecisionProvider | None = None,
@@ -59,16 +60,20 @@ class AutonomousRuntime:
                 raise RuntimeError("A DecisionProvider or configured ReasoningProvider is required")
             decider = ReasoningDecisionProvider(self.reasoning_provider, self.actions.proposal_validator, self.manager)
         requirements = requirements or self.analyzer.analyze(task)
-        agent = self.registry.find(requirements)
-        created = agent is None
-        if agent is None:
+        if self.agent_planner is not None:
+            agent, created = await self.agent_planner.select_or_create(
+                root_agent_id, task_id, task, requirements)
+        else:
+            agent = self.registry.find(requirements)
+            created = agent is None
+        if self.agent_planner is None and agent is None:
             agent = self.factory.create(root_agent_id, AgentSpec(
                 name=requirements.role, role=requirements.role, objective=f"Execute {task}", task=task,
                 required_capabilities=requirements.capabilities, tools=requirements.tools, task_id=task_id,
                 constraints={"least_privilege": True},
             ))
             self.registry.register(agent, requirements.capabilities)
-        else:
+        elif self.agent_planner is None:
             self.manager.assign_task(root_agent_id, agent.agent_id, task, task_id=task_id)
 
         async def work(child: Agent, _: AgentManager) -> str:

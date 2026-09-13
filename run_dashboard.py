@@ -18,6 +18,7 @@ from app.autonomy.approvals import ApprovalStore, ApprovalSystem
 from app.autonomy.mode_policy import ModePolicy
 from app.autonomy.triggers import TriggerEngine, TriggerStore
 from app.bootstrap import Application
+from app.agents.planning import AgentPlanningWorkflow
 from app.config.settings import load_settings
 from app.dashboard import DashboardRuntime, DashboardServer, DashboardService, RuntimeCommandGateway
 from app.dashboard.runtime_bridge import RuntimeEventBridge
@@ -81,6 +82,8 @@ async def serve() -> None:
             "Root Operator", "orchestrator", "Supervise autonomous missions",
             {permission.value for permission in Permission})
         runner = RuntimeMissionComposer(application.autonomous, application.task_engine, root_agent.agent_id)
+        application.autonomous.agent_planner = AgentPlanningWorkflow(
+            provider, application.agent_manager, application.autonomous.registry, root)
         execution_status = "healthy"
     else:
         async def runner(_):

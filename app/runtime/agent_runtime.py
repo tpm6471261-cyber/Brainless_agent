@@ -65,10 +65,18 @@ class AgentRuntime:
             for provider_name in task.providers:
                 if results:
                     self.state.transition(RuntimeState.SWITCHING_PROVIDER)
-                response = await self._run_provider(
-                    task, provider_name, task.prompt_profile or task.category, results, started,
-                    final_result=not task.synthesis and provider_name == task.providers[-1],
-                )
+                try:
+                    response = await self._run_provider(
+                        task, provider_name, task.prompt_profile or task.category, results, started,
+                        final_result=not task.synthesis and provider_name == task.providers[-1],
+                    )
+                except Exception:
+                    # Claude is an optional best-effort provider. Its changing UI,
+                    # regional availability, or login state must not discard useful
+                    # ChatGPT/Gemini results. A Claude-only task still reports failure.
+                    if provider_name != "claude" or not results:
+                        raise
+                    continue
                 results.append((provider_name, response))
             if task.synthesis and len(results) > 1 and task.synthesis_provider:
                 self.state.transition(RuntimeState.SYNTHESIZING)
@@ -95,6 +103,11 @@ class AgentRuntime:
                                      previous_results=previous_results, context=local_context, requirements="")
         started = time.monotonic()
         try:
+            # Each rendered prompt owns a tab. Providers keep these tabs open and
+            # restore their saved conversation URLs on subsequent application runs.
+            prepare = getattr(provider, "prepare_conversation", None)
+            if prepare is not None:
+                prepare(prompt)
             self.state.transition(RuntimeState.OPENING_BROWSER)
             await self._act(f"open {provider_name}", provider.open, task_started)
             self.state.transition(RuntimeState.VERIFYING_PAGE)
@@ -106,6 +119,9 @@ class AgentRuntime:
             await self._act(f"send {provider_name} prompt", lambda: provider.send_prompt(prompt), task_started)
             self.state.transition(RuntimeState.WAITING_RESPONSE)
             await self._act(f"wait for {provider_name} response", provider.wait_for_response, task_started)
+            remember = getattr(provider, "remember_conversation", None)
+            if remember is not None:
+                remember()
             self.state.transition(RuntimeState.EXTRACTING_RESPONSE)
             response = await self._extract_response(provider_name, provider, task_started)
             self.state.transition(RuntimeState.VALIDATING_RESPONSE)

@@ -36,9 +36,17 @@ class ChatbotProvider(ABC):
         self.page: Page | None = None
         self._response_count_before_submit = 0
         self._response_counts_before_submit: dict[str, int] = {}
+        self._conversation_prompt: str | None = None
+
+    def prepare_conversation(self, prompt: str) -> None:
+        """Select the stable tab associated with this exact rendered prompt."""
+        self._conversation_prompt = prompt
 
     async def open(self) -> None:
-        self.page = await self.browser.page_for(self.url)
+        if self._conversation_prompt is None:
+            self.page = await self.browser.page_for(self.url)
+        else:
+            self.page = await self.browser.conversation_page(self.name, self._conversation_prompt, self.url)
 
     async def verify_page(self) -> None:
         page = self._require_page()
@@ -74,6 +82,12 @@ class ChatbotProvider(ABC):
         await field.click()
         await field.fill(prompt)
         await field.press("Enter")
+
+    def remember_conversation(self) -> None:
+        """Save the canonical chat URL after the SPA has created a conversation."""
+        if self.page is not None and self._conversation_prompt is not None:
+            self.browser.remember_conversation(
+                self.name, self._conversation_prompt, self.page.url, self.url)
 
     async def wait_for_response(self, timeout_seconds: int = 180) -> None:
         response = await self._first_visible(self.selectors.response)
